@@ -2,7 +2,13 @@
  * Phase 2 main game screen: header, Killer board, keypad.
  */
 
-import { useMemo, useReducer } from 'react'
+import {
+	useEffect,
+	useMemo,
+	useState,
+	type Dispatch,
+	type SetStateAction,
+} from 'react'
 import {
 	StyleSheet,
 	Text,
@@ -16,6 +22,8 @@ import {
 	isBoardComplete,
 	isBoardValid,
 	PHASE2_DEMO_SEED_LABEL,
+	type GameAction,
+	type GameState,
 } from '../gameplay'
 import { colors, spacing, typography } from '../theme'
 import { computeBoardSize } from './boardLayout'
@@ -29,16 +37,51 @@ import type { Digit } from '../game/sudoku'
  */
 export function GameScreen() {
 	const insets = useSafeAreaInsets()
-	const { width } = useWindowDimensions()
-	const [state, dispatch] = useReducer(
-		gameReducer,
-		undefined,
-		() => createGame({ seedLabel: PHASE2_DEMO_SEED_LABEL }),
-	)
+	const [state, setState] = useState<GameState | null>(null)
 
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setState(createGame({ seedLabel: PHASE2_DEMO_SEED_LABEL }))
+		}, 0)
+		return () => clearTimeout(timer)
+	}, [])
+
+	if (state === null) {
+		return (
+			<View
+				style={[
+					styles.screen,
+					{
+						paddingTop: insets.top + 8,
+						paddingBottom: insets.bottom,
+					},
+				]}
+			>
+				<Text style={styles.loading}>Загрузка головоломки…</Text>
+			</View>
+		)
+	}
+
+	return <LoadedGameScreen state={state} setState={setState} />
+}
+
+interface LoadedGameScreenProps {
+	state: GameState
+	setState: Dispatch<SetStateAction<GameState | null>>
+}
+
+function LoadedGameScreen({ state, setState }: LoadedGameScreenProps) {
+	const insets = useSafeAreaInsets()
+	const { width } = useWindowDimensions()
 	const boardSize = useMemo(() => computeBoardSize(width), [width])
 	const complete = isBoardComplete(state)
 	const valid = isBoardValid(state)
+
+	const dispatch = (action: GameAction): void => {
+		setState((current) =>
+			current === null ? current : gameReducer(current, action),
+		)
+	}
 
 	return (
 		<View
@@ -118,5 +161,13 @@ const styles = StyleSheet.create({
 	},
 	solvedSpacer: {
 		height: 28,
+	},
+	loading: {
+		flex: 1,
+		textAlign: 'center',
+		textAlignVertical: 'center',
+		color: colors.primaryText,
+		fontSize: 18,
+		fontWeight: '600',
 	},
 })
