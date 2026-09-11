@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Киллер Судоку",
+    "slug": "killer-sudoku",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "killer-sudoku",
+    "android": {
+      "package": "com.calculatorplatform.killersudoku",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#1B4332",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.calculatorplatform.killersudoku"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

@@ -1,0 +1,1 @@
+export { APP_NAME, APP_SUBTITLE, APP_PACKAGE, APP_VERSION, APP_VERSION_CODE } from './constants'
