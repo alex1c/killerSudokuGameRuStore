@@ -34,25 +34,22 @@ Branch: `main`
 
 ## Phase 1 scope
 
-Mathematical foundation only:
+Mathematical foundation only — **PASS** (Codex Checkpoint 1).
 
-1. Seeded RNG
-2. Classic Sudoku solver + solution counter
-3. Solved-board generator
-4. Killer cage model + generator
-5. Cage combinations
-6. Killer validator
-7. Killer solver + uniqueness
-8. Full Killer puzzle generator
-9. Automated tests + stress suite
+## Phase 2 — gameplay board foundation
 
-UI is intentionally minimal:
+Current focus:
 
-```text
-Киллер Судоку
-Математическое ядро готово
-Phase 1
-```
+- board renderer (9×9, responsive)
+- cage borders + cage sum anchors
+- cell selection + related / same-number highlights
+- digit keypad 1–9
+- explicit-rule conflicts (row / column / box / cage)
+- pure `src/gameplay/**` state layer
+
+Not in Phase 2: Notes, Undo, Erase, Hint, timer logic, save/continue, Daily, ads.
+
+Development demo seed label: `phase2-demo-001` (hashed to a reproducible numeric seed).
 
 ## Killer Sudoku rules
 
@@ -84,15 +81,18 @@ const puzzle = generateKillerPuzzle({ seed: 20260911 })
 ```text
 src/
   app/                 # constants / thin app helpers
+  gameplay/            # Phase 2 pure game state (reducer/selectors)
   game/
     sudoku/            # classic board types, solver, solved generator
     killer/            # cages, combinations, validator, solver, generator
     difficulty/        # preset foundation (not human difficulty grader)
+  ui/                  # Phase 2 board / keypad / game screen
+  theme/               # light theme tokens
   storage/             # minimal pure storage abstraction
   utils/               # seeded RNG
 ```
 
-`src/game/**` is pure TypeScript and independent from React Native APIs.
+`src/game/**` and `src/gameplay/**` are pure TypeScript and independent from React Native APIs.
 
 ## Commands
 
@@ -141,9 +141,11 @@ Highlights:
 - AVD does not replace real-device bottom safe-area checks
 - In-app **Обучение** remains on the roadmap
 
-## Known Phase 1 limitations
+## Known Phase 1–2 limitations
 
-- Difficulty presets tune cage-size weights only; they are **not** a final human difficulty grader
+- Difficulty presets are cage-size weights only; they are **not** a final human difficulty grader
 - Puzzle boards prefer cage-only clues; a few givens may remain when needed for uniqueness
-- No gameplay UI beyond the Phase 1 status screen
-- No ads / analytics / backup / Daily Challenge UI yet
+- Phase 2 has no Notes / Undo / Erase / Hint / real timer / save-continue
+- Conflicts are explicit-rule only (no hidden-solution auto-check)
+- Cage borders use inset solid lines (RN dashed borders are unreliable)
+- Dark theme not implemented yet
