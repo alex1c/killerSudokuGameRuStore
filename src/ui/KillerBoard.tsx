@@ -10,6 +10,7 @@ import {
 	getCageBorderFlags,
 	getCageSumAnchor,
 	getCellAccessibilityLabel,
+	getCellNotesMask,
 	getCellValue,
 	getConflictCells,
 	getRelatedCells,
@@ -78,6 +79,7 @@ export function KillerBoard(props: KillerBoardProps) {
 					col={col}
 					cellSize={cellSize}
 					value={getCellValue(state, index)}
+					notesMask={getCellNotesMask(state, index)}
 					isGiven={isGivenCell(state, index)}
 					cageSum={sumAnchors.get(index) ?? null}
 					cageBorders={getCageBorderFlags(index, cellToCage)}

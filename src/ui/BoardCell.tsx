@@ -1,11 +1,11 @@
 /**
- * Single board cell: digit, cage sum, selection/conflict backgrounds,
- * inset cage borders, and Sudoku grid edges.
+ * Single board cell: digit / notes, cage sum, highlights, cage borders.
  */
 
 import { memo, useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { CageBorderFlags } from '../gameplay'
+import { notesToDigits } from '../gameplay'
 import { borders, colors, typography } from '../theme'
 
 export interface BoardCellProps {
@@ -13,6 +13,7 @@ export interface BoardCellProps {
 	col: number
 	cellSize: number
 	value: number
+	notesMask: number
 	isGiven: boolean
 	cageSum: number | null
 	cageBorders: CageBorderFlags
@@ -30,6 +31,7 @@ function BoardCellComponent(props: BoardCellProps) {
 		col,
 		cellSize,
 		value,
+		notesMask,
 		isGiven,
 		cageSum,
 		cageBorders,
@@ -62,6 +64,11 @@ function BoardCellComponent(props: BoardCellProps) {
 		9,
 		Math.round(cellSize * typography.sumSizeRatio),
 	)
+	const noteSize = Math.max(
+		7,
+		Math.round(cellSize * typography.noteSizeRatio),
+	)
+	const noteDigits = value === 0 ? notesToDigits(notesMask) : []
 
 	const borderTopWidth =
 		row % 3 === 0 ? borders.gridThick : borders.gridThin
@@ -105,7 +112,6 @@ function BoardCellComponent(props: BoardCellProps) {
 				},
 			]}
 		>
-			{/* Inset cage borders sit inside the cell to avoid fighting thick grid lines. */}
 			<View
 				pointerEvents="none"
 				style={[
@@ -153,7 +159,34 @@ function BoardCellComponent(props: BoardCellProps) {
 				>
 					{value}
 				</Text>
-			) : null}
+			) : (
+				<View style={styles.notesGrid} pointerEvents="none">
+					{[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+						<Text
+							key={digit}
+							style={[
+								styles.note,
+								{
+									fontSize: noteSize,
+									lineHeight: noteSize + 1,
+									// Leave top-left clearer when a cage sum is present.
+									opacity:
+										cageSum !== null && digit === 1
+											? 0.75
+											: 1,
+									color: noteDigits.includes(
+										digit as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
+									)
+										? colors.noteText
+										: 'transparent',
+								},
+							]}
+						>
+							{digit}
+						</Text>
+					))}
+				</View>
+			)}
 		</Pressable>
 	)
 }
@@ -173,7 +206,7 @@ const styles = StyleSheet.create({
 	},
 	sum: {
 		position: 'absolute',
-		top: 2,
+		top: 1,
 		left: 3,
 		color: colors.secondaryText,
 		fontWeight: '600',
@@ -182,5 +215,18 @@ const styles = StyleSheet.create({
 	digit: {
 		textAlign: 'center',
 		zIndex: 1,
+	},
+	notesGrid: {
+		...StyleSheet.absoluteFill,
+		marginTop: 10,
+		marginHorizontal: 2,
+		marginBottom: 2,
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+	},
+	note: {
+		width: '33.333%',
+		textAlign: 'center',
+		fontWeight: '500',
 	},
 })

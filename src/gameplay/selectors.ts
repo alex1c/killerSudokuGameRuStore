@@ -1,6 +1,6 @@
 /**
- * Pure selectors for highlights, conflicts, and completion checks.
- * No dependency on hidden solution digits for conflict styling.
+ * Pure selectors for highlights, conflicts, notes, and completion checks.
+ * Mid-game conflicts never consult the hidden solution.
  */
 
 import {
@@ -12,6 +12,7 @@ import {
 	type CellIndex,
 } from '../game/sudoku'
 import type { KillerCage } from '../game/killer'
+import { notesToDigits } from './notes'
 import type { GameState } from './types'
 
 /**
@@ -26,6 +27,13 @@ export function isGivenCell(state: GameState, cell: CellIndex): boolean {
  */
 export function getCellValue(state: GameState, cell: CellIndex): number {
 	return state.values[cell] ?? 0
+}
+
+/**
+ * Note bitmask for a cell.
+ */
+export function getCellNotesMask(state: GameState, cell: CellIndex): number {
+	return state.notes[cell] ?? 0
 }
 
 /**
@@ -44,19 +52,34 @@ export function buildCellCageMap(
 }
 
 /**
+ * All cells belonging to the same cage as `cell`.
+ */
+export function getCageCellsFor(
+	state: GameState,
+	cell: CellIndex,
+): readonly CellIndex[] {
+	for (const cage of state.puzzle.cages) {
+		if (cage.cells.includes(cell)) {
+			return cage.cells
+		}
+	}
+	return []
+}
+
+/**
  * Top-left-like anchor for cage sum labels: smallest row, then smallest col.
  */
 export function getCageSumAnchor(cage: KillerCage): CellIndex {
 	let best = cage.cells[0]!
 	let bestPos = indexToPosition(best)
 	for (let i = 1; i < cage.cells.length; i += 1) {
-		const cell = cage.cells[i]!
-		const pos = indexToPosition(cell)
+		const nextCell = cage.cells[i]!
+		const pos = indexToPosition(nextCell)
 		if (
 			pos.row < bestPos.row ||
 			(pos.row === bestPos.row && pos.col < bestPos.col)
 		) {
-			best = cell
+			best = nextCell
 			bestPos = pos
 		}
 	}
@@ -138,6 +161,20 @@ export function getSameNumberCells(
 		}
 	}
 	return result
+}
+
+/**
+ * Count how many times each digit 1–9 appears as a main value.
+ */
+export function countDigitOccurrences(state: GameState): number[] {
+	const counts = Array.from({ length: 10 }, () => 0)
+	for (let i = 0; i < BOARD_CELLS; i += 1) {
+		const value = state.values[i] ?? 0
+		if (value >= 1 && value <= 9) {
+			counts[value]! += 1
+		}
+	}
+	return counts
 }
 
 /**
@@ -241,6 +278,43 @@ export function isBoardValid(state: GameState): boolean {
 }
 
 /**
+ * Completion check: full + explicit-valid + matches hidden solution.
+ * Solution is consulted only at this completion gate.
+ */
+export function isPuzzleSolved(state: GameState): boolean {
+	if (!isBoardValid(state)) {
+		return false
+	}
+	for (let i = 0; i < BOARD_CELLS; i += 1) {
+		if (state.values[i] !== state.puzzle.solution[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+/**
+ * True when the session has any player progress worth confirming on New Game.
+ */
+export function hasPlayerProgress(state: GameState): boolean {
+	if (state.history.length > 0) {
+		return true
+	}
+	for (let i = 0; i < BOARD_CELLS; i += 1) {
+		if (isGivenCell(state, i)) {
+			continue
+		}
+		if ((state.values[i] ?? 0) !== 0) {
+			return true
+		}
+		if ((state.notes[i] ?? 0) !== 0) {
+			return true
+		}
+	}
+	return false
+}
+
+/**
  * Accessibility label for a cell.
  */
 export function getCellAccessibilityLabel(
@@ -250,11 +324,15 @@ export function getCellAccessibilityLabel(
 	const { row, col } = indexToPosition(cell)
 	const value = getCellValue(state, cell)
 	const base = `Строка ${row + 1}, столбец ${col + 1}`
-	if (value === 0) {
-		return base
+	if (value !== 0) {
+		if (isGivenCell(state, cell)) {
+			return `${base}, задано ${value}`
+		}
+		return `${base}, ${value}`
 	}
-	if (isGivenCell(state, cell)) {
-		return `${base}, задано ${value}`
+	const notes = notesToDigits(getCellNotesMask(state, cell))
+	if (notes.length > 0) {
+		return `${base}, заметки ${notes.join(' ')}`
 	}
-	return `${base}, ${value}`
+	return base
 }

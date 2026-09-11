@@ -38,18 +38,17 @@ Mathematical foundation only — **PASS** (Codex Checkpoint 1).
 
 ## Phase 2 — gameplay board foundation
 
-Current focus:
+**PASS WITH FIXES** (Codex Checkpoint 2).
 
-- board renderer (9×9, responsive)
-- cage borders + cage sum anchors
-- cell selection + related / same-number highlights
-- digit keypad 1–9
-- explicit-rule conflicts (row / column / box / cage)
-- pure `src/gameplay/**` state layer
+## Phase 3 — core gameplay loop
 
-Not in Phase 2: Notes, Undo, Erase, Hint, timer logic, save/continue, Daily, ads.
+- Notes mode with 3×3 candidate rendering
+- Erase + multi-level Undo (restores auto-cleared notes)
+- Real timer with AppState pause
+- Completion overlay + New Game / Replay
+- Deferred puzzle generation preserved (no sync block on first paint)
 
-Development demo seed label: `phase2-demo-001` (hashed to a reproducible numeric seed).
+Not yet: Hint, difficulty grader, Daily, stats, save/continue, ads.
 
 ## Killer Sudoku rules
 
@@ -141,11 +140,11 @@ Highlights:
 - AVD does not replace real-device bottom safe-area checks
 - In-app **Обучение** remains on the roadmap
 
-## Known Phase 1–2 limitations
+## Known Phase 1–3 limitations
 
 - Difficulty presets are cage-size weights only; they are **not** a final human difficulty grader
 - Puzzle boards prefer cage-only clues; a few givens may remain when needed for uniqueness
-- Phase 2 has no Notes / Undo / Erase / Hint / real timer / save-continue
-- Conflicts are explicit-rule only (no hidden-solution auto-check)
+- No Hint / Daily / stats / save-continue / ads yet
+- Conflicts are explicit-rule only mid-game (solution checked only at completion)
 - Cage borders use inset solid lines (RN dashed borders are unreliable)
 - Dark theme not implemented yet

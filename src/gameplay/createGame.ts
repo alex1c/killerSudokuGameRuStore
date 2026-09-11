@@ -1,42 +1,67 @@
 /**
- * Create a fresh GameState from a Killer puzzle.
+ * Create a fresh GameState from a Killer puzzle / seed.
  */
 
 import { cloneBoard } from '../game/sudoku'
 import { generateKillerPuzzle, type KillerPuzzle } from '../game/killer'
+import { createEmptyNotes } from './notes'
 import {
+	createRandomSeed,
 	hashSeedLabel,
-	PHASE2_DEMO_SEED_LABEL,
 	type GameState,
 } from './types'
 
 /**
  * Build gameplay state from an already-generated puzzle.
- * Copies givens into `values`; does not expose solution to UI paths.
+ * Timer starts paused — UI resumes after the board is playable.
  */
 export function createGameFromPuzzle(puzzle: KillerPuzzle): GameState {
 	return {
 		puzzle,
 		values: cloneBoard(puzzle.board),
+		notes: createEmptyNotes(),
 		selectedCell: null,
+		notesMode: false,
+		timerAccumulatedMs: 0,
+		timerRunningSince: null,
+		status: 'playing',
+		history: [],
 		mistakes: 0,
 	}
 }
 
 export interface CreateGameOptions {
-	/** Numeric seed override. Defaults to hashed Phase 2 demo label. */
+	/** Numeric seed override. */
 	seed?: number
-	/** String label hashed into a seed (e.g. phase2-demo-001). */
+	/** String label hashed into a seed. */
 	seedLabel?: string
 }
 
 /**
- * Generate a reproducible Phase 2 demo puzzle and wrap it in GameState.
+ * Resolve a seed from options, or create a fresh local seed.
+ */
+export function resolveGameSeed(options: CreateGameOptions = {}): number {
+	if (options.seed !== undefined) {
+		return options.seed >>> 0
+	}
+	if (options.seedLabel !== undefined) {
+		return hashSeedLabel(options.seedLabel)
+	}
+	return createRandomSeed()
+}
+
+/**
+ * Generate a Killer puzzle and wrap it in GameState.
  */
 export function createGame(options: CreateGameOptions = {}): GameState {
-	const seed =
-		options.seed ??
-		hashSeedLabel(options.seedLabel ?? PHASE2_DEMO_SEED_LABEL)
+	const seed = resolveGameSeed(options)
 	const puzzle = generateKillerPuzzle({ seed })
+	return createGameFromPuzzle(puzzle)
+}
+
+/**
+ * Replay the same puzzle with cleared progress and timer.
+ */
+export function createReplayGame(puzzle: KillerPuzzle): GameState {
 	return createGameFromPuzzle(puzzle)
 }
