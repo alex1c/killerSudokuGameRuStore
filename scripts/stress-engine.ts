@@ -11,7 +11,6 @@ import {
 	countKillerSolutions,
 	generateKillerPuzzle,
 	validateKillerPuzzle,
-	DEFAULT_KILLER_NODE_LIMIT,
 } from '../src/game/killer'
 
 interface StressSummary {
@@ -66,7 +65,7 @@ function main(): void {
 			const solutions = countKillerSolutions(
 				{ board: puzzle.board, cages: puzzle.cages },
 				2,
-				DEFAULT_KILLER_NODE_LIMIT,
+				80_000,
 			)
 			if (solutions !== 1) {
 				summary.failed += 1

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.22",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
@@ -31,6 +32,8 @@
     "web": "expo start --web",
     "test": "jest",
     "test:engine:stress": "tsx scripts/stress-engine.ts",
+    "test:engine:stress:difficulty": "tsx scripts/stress-difficulty.ts",
+    "profile:generator": "tsx scripts/profile-generator.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },

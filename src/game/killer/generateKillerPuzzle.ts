@@ -1,10 +1,10 @@
 /**
- * Full Killer Sudoku puzzle generation pipeline.
+ * Full Killer Sudoku puzzle generation pipeline (Phase 4 performance).
  *
- * seed → solved board → cages → minimize givens under Killer uniqueness → puzzle
+ * seed → solved board → cages → uniqueness → optional dig → puzzle
  *
- * Uniqueness is always checked with Killer constraints (cages + remaining givens).
- * The generator prefers cage-only boards and keeps minimal givens only when needed.
+ * Dig is capped by preset.maxEmptyCells and soft node budgets so mobile
+ * devices do not spend tens of seconds proving uniqueness on sparse boards.
  */
 
 import { createSeededRandom, shuffledCopy } from '../../utils/seededRandom'
@@ -22,32 +22,21 @@ import {
 } from '../sudoku/types'
 import { generateKillerCages } from './cageGenerator'
 import { type KillerCage } from './cages'
-import {
-	countKillerSolutions,
-	solveKillerSudoku,
-	DEFAULT_KILLER_NODE_LIMIT,
-} from './solver'
+import { countKillerSolutions } from './solver'
 import { validateKillerPuzzle } from './validator'
+import { isValidSudoku } from '../sudoku/validation'
 
 export interface GenerateKillerPuzzleOptions {
 	seed: number
-	/** Architectural difficulty preset (not a human grader). */
 	difficultyPreset?: Difficulty
-	/** Optional raw preset override. */
 	preset?: CageGenerationPreset
-	/** Override attempt budget. */
 	maxAttempts?: number
 }
 
 export interface KillerPuzzle {
 	seed: number
-	/** Attempt index that succeeded (0-based). */
 	attempt: number
 	difficultyPreset: Difficulty
-	/**
-	 * Starting board clues (0 = empty).
-	 * Prefer empty (cage-only); may keep minimal givens for uniqueness.
-	 */
 	board: SudokuBoard
 	solution: SudokuBoard
 	cages: KillerCage[]
@@ -65,12 +54,36 @@ export class KillerPuzzleGenerationError extends Error {
 	}
 }
 
-function boardsEqual(a: SudokuBoard, b: SudokuBoard): boolean {
-	if (a.length !== b.length) {
+/**
+ * True when the known solution still satisfies the clue board + cages.
+ * Cheaper than a full re-solve after uniqueness is already proven.
+ */
+function solutionMatchesPuzzle(
+	solution: SudokuBoard,
+	board: SudokuBoard,
+	cages: readonly KillerCage[],
+): boolean {
+	if (!isValidSudoku(solution)) {
 		return false
 	}
-	for (let i = 0; i < a.length; i += 1) {
-		if (a[i] !== b[i]) {
+	for (let i = 0; i < BOARD_CELLS; i += 1) {
+		const clue = board[i] ?? 0
+		if (clue !== 0 && clue !== solution[i]) {
+			return false
+		}
+	}
+	for (const cage of cages) {
+		const digits = new Set<number>()
+		let sum = 0
+		for (const cell of cage.cells) {
+			const digit = solution[cell] ?? 0
+			if (digit < 1 || digit > 9 || digits.has(digit)) {
+				return false
+			}
+			digits.add(digit)
+			sum += digit
+		}
+		if (sum !== cage.sum) {
 			return false
 		}
 	}
@@ -78,14 +91,14 @@ function boardsEqual(a: SudokuBoard, b: SudokuBoard): boolean {
 }
 
 /**
- * Remove as many givens as possible while preserving Killer uniqueness.
- * Starts from the full solution so uniqueness is initially guaranteed.
+ * Dig givens from a full solution while uniqueness holds.
+ * Stops early when maxEmptyCells is reached to keep dig cheap on device.
  */
 function minimizeGivens(
 	solution: SudokuBoard,
 	cages: readonly KillerCage[],
 	seed: number,
-	nodeLimit: number,
+	preset: CageGenerationPreset,
 ): SudokuBoard {
 	const board = cloneBoard(solution)
 	const rng = createSeededRandom(seed >>> 0)
@@ -94,7 +107,11 @@ function minimizeGivens(
 		rng,
 	)
 
+	let emptyCount = 0
 	for (const index of order) {
+		if (emptyCount >= preset.maxEmptyCells) {
+			break
+		}
 		if (board[index] === 0) {
 			continue
 		}
@@ -103,10 +120,12 @@ function minimizeGivens(
 		const solutions = countKillerSolutions(
 			{ board, cages },
 			2,
-			nodeLimit,
+			preset.digNodeLimit,
 		)
 		if (solutions !== 1) {
 			board[index] = backup
+		} else {
+			emptyCount += 1
 		}
 	}
 
@@ -115,7 +134,6 @@ function minimizeGivens(
 
 /**
  * Generate a validated unique Killer puzzle for the given seed.
- * Retries cage layouts up to maxAttempts. Never loops forever.
  */
 export function generateKillerPuzzle(
 	options: GenerateKillerPuzzleOptions,
@@ -124,7 +142,6 @@ export function generateKillerPuzzle(
 	const preset =
 		options.preset ?? getCagePreset(options.difficultyPreset)
 	const maxAttempts = options.maxAttempts ?? preset.maxAttempts
-	const nodeLimit = DEFAULT_KILLER_NODE_LIMIT
 
 	let lastError = 'unknown failure'
 
@@ -147,21 +164,19 @@ export function generateKillerPuzzle(
 				continue
 			}
 
-			// Fast path: try cage-only uniqueness first.
 			let board = createEmptyBoard()
 			let solutionCount = countKillerSolutions(
 				{ board, cages },
 				2,
-				nodeLimit,
+				preset.cageOnlyNodeLimit,
 			)
 
 			if (solutionCount !== 1) {
-				// Guaranteed-unique path: dig givens from the full solution.
-				board = minimizeGivens(solution, cages, digSeed, nodeLimit)
+				board = minimizeGivens(solution, cages, digSeed, preset)
 				solutionCount = countKillerSolutions(
 					{ board, cages },
 					2,
-					nodeLimit,
+					preset.digNodeLimit,
 				)
 				if (solutionCount !== 1) {
 					lastError = `non-unique-after-dig:${solutionCount}`
@@ -169,8 +184,7 @@ export function generateKillerPuzzle(
 				}
 			}
 
-			const solved = solveKillerSudoku({ board, cages })
-			if (solved === null || !boardsEqual(solved, solution)) {
+			if (!solutionMatchesPuzzle(solution, board, cages)) {
 				lastError = 'solver-mismatch'
 				continue
 			}
