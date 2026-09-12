@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
 	Alert,
-	InteractionManager,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -75,21 +74,25 @@ function AppRoot() {
 			}
 			const epoch = ++loadEpochRef.current
 			setRoute({ name: 'loading', difficulty, seed })
-			loadTaskRef.current = InteractionManager.runAfterInteractions(() => {
+
+			// Defer generation off the current interaction tick (no InteractionManager —
+			// it is deprecated and triggers a yellow-box warning in __DEV__).
+			let cancelled = false
+			const timer = setTimeout(() => {
 				void (async () => {
 					try {
 						const state = createGame({ seed, difficulty })
-						if (epoch !== loadEpochRef.current) {
+						if (cancelled || epoch !== loadEpochRef.current) {
 							return
 						}
 						// Persist before entering play so force-stop still has Continue.
 						await saveRepository.savePlaying(state)
-						if (epoch !== loadEpochRef.current) {
+						if (cancelled || epoch !== loadEpochRef.current) {
 							return
 						}
 						setRoute({ name: 'play', state })
 					} catch (error) {
-						if (epoch !== loadEpochRef.current) {
+						if (cancelled || epoch !== loadEpochRef.current) {
 							return
 						}
 						Alert.alert(
@@ -107,7 +110,14 @@ function AppRoot() {
 						}
 					}
 				})()
-			})
+			}, 32)
+
+			loadTaskRef.current = {
+				cancel: () => {
+					cancelled = true
+					clearTimeout(timer)
+				},
+			}
 		},
 		[refreshSavedCard, saveRepository],
 	)
