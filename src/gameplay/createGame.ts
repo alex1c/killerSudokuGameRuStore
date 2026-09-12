@@ -1,7 +1,8 @@
 /**
- * Create a fresh GameState from a Killer puzzle / seed.
+ * Create a fresh GameState from a Killer puzzle / seed / difficulty.
  */
 
+import type { Difficulty } from '../game/difficulty'
 import { cloneBoard } from '../game/sudoku'
 import { generateKillerPuzzle, type KillerPuzzle } from '../game/killer'
 import { createEmptyNotes } from './notes'
@@ -35,6 +36,8 @@ export interface CreateGameOptions {
 	seed?: number
 	/** String label hashed into a seed. */
 	seedLabel?: string
+	/** Generation profile (not a human difficulty grade). */
+	difficulty?: Difficulty
 }
 
 /**
@@ -55,7 +58,10 @@ export function resolveGameSeed(options: CreateGameOptions = {}): number {
  */
 export function createGame(options: CreateGameOptions = {}): GameState {
 	const seed = resolveGameSeed(options)
-	const puzzle = generateKillerPuzzle({ seed })
+	const puzzle = generateKillerPuzzle({
+		seed,
+		difficultyPreset: options.difficulty ?? 'medium',
+	})
 	return createGameFromPuzzle(puzzle)
 }
 

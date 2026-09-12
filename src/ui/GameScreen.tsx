@@ -1,5 +1,5 @@
 /**
- * Phase 3 game screen: deferred load, timer, notes/undo/erase, completion.
+ * Playable game screen — receives an already-created GameState from the app shell.
  */
 
 import {
@@ -8,13 +8,9 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type Dispatch,
-	type SetStateAction,
 } from 'react'
 import {
-	Alert,
 	AppState,
-	InteractionManager,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -24,16 +20,16 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Digit } from '../game/sudoku'
+import { DIFFICULTY_LABELS } from '../game/difficulty'
 import {
 	countDigitOccurrences,
-	createGame,
 	formatElapsed,
 	gameReducer,
 	getElapsedMs,
-	hasPlayerProgress,
 	type GameAction,
 	type GameState,
 } from '../gameplay'
+import type { GameSaveRepository } from '../storage'
 import { colors, spacing, typography } from '../theme'
 import { computeBoardSize } from './boardLayout'
 import { CompletionOverlay } from './CompletionOverlay'
@@ -41,113 +37,74 @@ import { GameToolbar } from './GameToolbar'
 import { KillerBoard } from './KillerBoard'
 import { NumberKeypad } from './NumberKeypad'
 
-/**
- * Root screen keeps deferred generation so the first UI commit is never blocked.
- */
-export function GameScreen() {
-	const insets = useSafeAreaInsets()
-	const [state, setState] = useState<GameState | null>(null)
-	const loadTaskRef = useRef<{ cancel: () => void } | null>(null)
-
-	const queueGameLoad = useCallback((seed?: number) => {
-		if (loadTaskRef.current !== null) {
-			loadTaskRef.current.cancel()
-		}
-		// Clear the board first so the loading screen can paint before generation.
-		setState(null)
-		loadTaskRef.current = InteractionManager.runAfterInteractions(() => {
-			setState(createGame(seed !== undefined ? { seed } : {}))
-			loadTaskRef.current = null
-		})
-	}, [])
-
-	useEffect(() => {
-		// Schedule after first paint — never generate synchronously in render/effect body.
-		loadTaskRef.current = InteractionManager.runAfterInteractions(() => {
-			setState(createGame())
-			loadTaskRef.current = null
-		})
-		return () => {
-			if (loadTaskRef.current !== null) {
-				loadTaskRef.current.cancel()
-			}
-		}
-	}, [])
-
-	if (state === null) {
-		return (
-			<View
-				style={[
-					styles.screen,
-					{
-						paddingTop: insets.top + 8,
-						paddingBottom: insets.bottom,
-					},
-				]}
-			>
-				<Text style={styles.loading}>Загрузка головоломки…</Text>
-			</View>
-		)
-	}
-
-	return (
-		<LoadedGameScreen
-			state={state}
-			setState={setState}
-			onRequestNewGame={(seed) => {
-				queueGameLoad(seed)
-			}}
-		/>
-	)
+export interface GameScreenProps {
+	initialState: GameState
+	saveRepository: GameSaveRepository
+	onExitToHome: () => void
+	onNewGameFromCompletion: () => void
 }
 
-interface LoadedGameScreenProps {
-	state: GameState
-	setState: Dispatch<SetStateAction<GameState | null>>
-	onRequestNewGame: (seed?: number) => void
-}
+const TIMER_AUTOSAVE_MS = 30_000
 
-function LoadedGameScreen({
-	state,
-	setState,
-	onRequestNewGame,
-}: LoadedGameScreenProps) {
+export function GameScreen(props: GameScreenProps) {
+	const {
+		initialState,
+		saveRepository,
+		onExitToHome,
+		onNewGameFromCompletion,
+	} = props
 	const insets = useSafeAreaInsets()
 	const { width } = useWindowDimensions()
 	const boardSize = useMemo(() => computeBoardSize(width), [width])
+	const [state, setState] = useState<GameState>(initialState)
 	const [now, setNow] = useState(() => Date.now())
+	const stateRef = useRef(state)
+
+	useEffect(() => {
+		// Keep a latest snapshot for interval autosave without reading refs in render.
+		stateRef.current = state
+	}, [state])
+
+	const persist = useCallback(
+		(next: GameState, stamp: number = Date.now()) => {
+			if (next.status === 'completed') {
+				void saveRepository.clear()
+				return
+			}
+			void saveRepository.savePlaying(next, stamp)
+		},
+		[saveRepository],
+	)
 
 	const dispatch = useCallback(
 		(action: GameAction): void => {
-			setState((current) =>
-				current === null ? current : gameReducer(current, action),
-			)
+			setState((current) => {
+				const next = gameReducer(current, action)
+				const shouldPersist =
+					action.type === 'INPUT_DIGIT' ||
+					action.type === 'ERASE' ||
+					action.type === 'UNDO' ||
+					action.type === 'REPLAY' ||
+					action.type === 'TIMER_PAUSE' ||
+					action.type === 'COMPLETE' ||
+					action.type === 'DEV_FILL_SOLUTION'
+				if (shouldPersist || next.status === 'completed') {
+					persist(next)
+				}
+				return next
+			})
 		},
-		[setState],
+		[persist],
 	)
 
-	const replay = useCallback(() => {
-		const stamp = Date.now()
-		setState((current) => {
-			if (current === null) {
-				return current
-			}
-			const replayed = gameReducer(current, { type: 'REPLAY' })
-			return gameReducer(replayed, { type: 'TIMER_RESUME', now: stamp })
-		})
-		setNow(stamp)
-	}, [setState])
-
-	// Start the timer only once the playable board is mounted (loading excluded).
 	useEffect(() => {
 		const stamp = Date.now()
 		const id = setTimeout(() => {
 			dispatch({ type: 'TIMER_RESUME', now: stamp })
 		}, 0)
 		return () => clearTimeout(id)
-	}, [dispatch, state.puzzle.seed])
+	}, [dispatch, initialState.puzzle.seed])
 
-	// Re-render the clock label once per second without drifting accumulated time.
 	useEffect(() => {
 		if (state.status !== 'playing' || state.timerRunningSince === null) {
 			return
@@ -156,7 +113,16 @@ function LoadedGameScreen({
 		return () => clearInterval(id)
 	}, [state.status, state.timerRunningSince])
 
-	// Pause / resume on AppState background transitions.
+	useEffect(() => {
+		if (state.status !== 'playing') {
+			return
+		}
+		const id = setInterval(() => {
+			persist(stateRef.current, Date.now())
+		}, TIMER_AUTOSAVE_MS)
+		return () => clearInterval(id)
+	}, [persist, state.status, state.puzzle.seed])
+
 	useEffect(() => {
 		const onChange = (next: AppStateStatus) => {
 			const stamp = Date.now()
@@ -176,6 +142,8 @@ function LoadedGameScreen({
 		now,
 	)
 	const elapsedLabel = formatElapsed(elapsedMs)
+	const difficultyLabel =
+		DIFFICULTY_LABELS[state.puzzle.difficultyPreset]
 
 	const digitCounts = useMemo(
 		() => countDigitOccurrences(state),
@@ -191,25 +159,6 @@ function LoadedGameScreen({
 		return set
 	}, [digitCounts])
 
-	const confirmNewGame = () => {
-		if (hasPlayerProgress(state) && state.status === 'playing') {
-			Alert.alert(
-				'Новая игра',
-				'Начать новую игру? Текущий прогресс будет потерян.',
-				[
-					{ text: 'Отмена', style: 'cancel' },
-					{
-						text: 'Начать',
-						style: 'destructive',
-						onPress: () => onRequestNewGame(),
-					},
-				],
-			)
-			return
-		}
-		onRequestNewGame()
-	}
-
 	const gameplayLocked = state.status === 'completed'
 
 	return (
@@ -223,24 +172,24 @@ function LoadedGameScreen({
 			]}
 		>
 			<View style={styles.header}>
-				<Text style={styles.title}>Киллер Судоку</Text>
-				<View style={styles.headerRight}>
-					<Text
-						style={styles.timer}
-						accessibilityLabel={`Время ${elapsedLabel}`}
-					>
-						{elapsedLabel}
-					</Text>
-					<Pressable
-						onPress={confirmNewGame}
-						accessibilityRole="button"
-						accessibilityLabel="Новая игра"
-						hitSlop={8}
-						style={styles.newButton}
-					>
-						<Text style={styles.newButtonText}>Новая</Text>
-					</Pressable>
+				<Pressable
+					onPress={onExitToHome}
+					accessibilityRole="button"
+					accessibilityLabel="На главную"
+					hitSlop={8}
+				>
+					<Text style={styles.homeLink}>←</Text>
+				</Pressable>
+				<View style={styles.headerCenter}>
+					<Text style={styles.title}>Киллер Судоку</Text>
+					<Text style={styles.difficulty}>{difficultyLabel}</Text>
 				</View>
+				<Text
+					style={styles.timer}
+					accessibilityLabel={`Время ${elapsedLabel}`}
+				>
+					{elapsedLabel}
+				</Text>
 			</View>
 
 			<View style={styles.boardWrap}>
@@ -288,8 +237,11 @@ function LoadedGameScreen({
 			<CompletionOverlay
 				visible={state.status === 'completed'}
 				elapsedLabel={formatElapsed(state.timerAccumulatedMs)}
-				onNewGame={() => onRequestNewGame()}
-				onReplay={replay}
+				onNewGame={onNewGameFromCompletion}
+				onReplay={() => {
+					dispatch({ type: 'REPLAY' })
+					dispatch({ type: 'TIMER_RESUME', now: Date.now() })
+				}}
 			/>
 		</View>
 	)
@@ -306,36 +258,34 @@ const styles = StyleSheet.create({
 		justifyContent: 'space-between',
 		paddingHorizontal: spacing.screenPadding,
 		marginBottom: spacing.headerGap,
-		minHeight: 36,
+		minHeight: 40,
+	},
+	homeLink: {
+		fontSize: 22,
+		color: colors.secondaryText,
+		width: 28,
+	},
+	headerCenter: {
+		flex: 1,
+		alignItems: 'center',
 	},
 	title: {
 		fontSize: typography.titleSize,
 		fontWeight: '700',
 		color: colors.headerText,
 	},
-	headerRight: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		gap: 12,
+	difficulty: {
+		fontSize: 12,
+		color: colors.secondaryText,
+		marginTop: 1,
 	},
 	timer: {
 		fontSize: typography.timerSize,
 		fontWeight: '500',
 		color: colors.secondaryText,
 		fontVariant: ['tabular-nums'],
-	},
-	newButton: {
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-		borderRadius: 8,
-		backgroundColor: colors.toolbarBackground,
-		borderWidth: 1,
-		borderColor: colors.keypadBorder,
-	},
-	newButtonText: {
-		color: colors.primaryText,
-		fontWeight: '600',
-		fontSize: 13,
+		minWidth: 52,
+		textAlign: 'right',
 	},
 	boardWrap: {
 		alignItems: 'center',
@@ -354,13 +304,5 @@ const styles = StyleSheet.create({
 	},
 	devSpacer: {
 		height: 4,
-	},
-	loading: {
-		flex: 1,
-		textAlign: 'center',
-		textAlignVertical: 'center',
-		color: colors.primaryText,
-		fontSize: 18,
-		fontWeight: '600',
 	},
 })

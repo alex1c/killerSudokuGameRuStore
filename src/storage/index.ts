@@ -1,7 +1,5 @@
 /**
- * Minimal storage abstraction for future persistence.
- * Phase 1 keeps this free of React Native imports so the engine
- * stays testable in pure Node/Jest.
+ * Storage adapters and saved-game repository exports.
  */
 
 export interface StorageAdapter {
@@ -10,7 +8,7 @@ export interface StorageAdapter {
 	removeItem(key: string): Promise<void>
 }
 
-/** In-memory adapter for unit tests and early development. */
+/** In-memory adapter for unit tests. */
 export class MemoryStorageAdapter implements StorageAdapter {
 	private readonly data = new Map<string, string>()
 
@@ -27,5 +25,20 @@ export class MemoryStorageAdapter implements StorageAdapter {
 	}
 }
 
-/** Current persistence schema version (bump on future migrations). */
 export const STORAGE_SCHEMA_VERSION = 1
+
+export {
+	SAVED_GAME_SCHEMA_VERSION,
+	ACTIVE_GAME_STORAGE_KEY,
+	serializeSavedGame,
+	parseSavedGame,
+	restoreGameFromSave,
+	computeEditableProgress,
+	formatProgressPercent,
+} from './savedGame'
+export type {
+	SavedGameV1,
+	SerializedKillerPuzzleV1,
+	LoadSavedGameResult,
+} from './savedGame'
+export { GameSaveRepository } from './gameSaveRepository'
