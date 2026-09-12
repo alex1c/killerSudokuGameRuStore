@@ -312,6 +312,23 @@ describe('completion and replay', () => {
 		expect(state.status).toBe('playing')
 	})
 
+	it('can resume a replayed game from a zero timer atomically', () => {
+		let state = baseState()
+		state = {
+			...state,
+			timerAccumulatedMs: 125000,
+			timerRunningSince: 1000,
+		}
+		const replayed = gameReducer(state, { type: 'REPLAY' })
+		const resumed = gameReducer(replayed, {
+			type: 'TIMER_RESUME',
+			now: 200000,
+		})
+
+		expect(resumed.timerAccumulatedMs).toBe(0)
+		expect(resumed.timerRunningSince).toBe(200000)
+	})
+
 	it('new game can use a different seed', () => {
 		const a = createGame({ seed: 100 })
 		const b = createGame({ seed: 200 })

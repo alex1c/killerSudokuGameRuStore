@@ -14,6 +14,7 @@ import {
 import {
 	Alert,
 	AppState,
+	InteractionManager,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -46,29 +47,29 @@ import { NumberKeypad } from './NumberKeypad'
 export function GameScreen() {
 	const insets = useSafeAreaInsets()
 	const [state, setState] = useState<GameState | null>(null)
-	const loadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const loadTaskRef = useRef<{ cancel: () => void } | null>(null)
 
 	const queueGameLoad = useCallback((seed?: number) => {
-		if (loadTimerRef.current !== null) {
-			clearTimeout(loadTimerRef.current)
+		if (loadTaskRef.current !== null) {
+			loadTaskRef.current.cancel()
 		}
 		// Clear the board first so the loading screen can paint before generation.
 		setState(null)
-		loadTimerRef.current = setTimeout(() => {
+		loadTaskRef.current = InteractionManager.runAfterInteractions(() => {
 			setState(createGame(seed !== undefined ? { seed } : {}))
-			loadTimerRef.current = null
-		}, 0)
+			loadTaskRef.current = null
+		})
 	}, [])
 
 	useEffect(() => {
 		// Schedule after first paint — never generate synchronously in render/effect body.
-		loadTimerRef.current = setTimeout(() => {
+		loadTaskRef.current = InteractionManager.runAfterInteractions(() => {
 			setState(createGame())
-			loadTimerRef.current = null
-		}, 0)
+			loadTaskRef.current = null
+		})
 		return () => {
-			if (loadTimerRef.current !== null) {
-				clearTimeout(loadTimerRef.current)
+			if (loadTaskRef.current !== null) {
+				loadTaskRef.current.cancel()
 			}
 		}
 	}, [])
@@ -124,6 +125,18 @@ function LoadedGameScreen({
 		},
 		[setState],
 	)
+
+	const replay = useCallback(() => {
+		const stamp = Date.now()
+		setState((current) => {
+			if (current === null) {
+				return current
+			}
+			const replayed = gameReducer(current, { type: 'REPLAY' })
+			return gameReducer(replayed, { type: 'TIMER_RESUME', now: stamp })
+		})
+		setNow(stamp)
+	}, [setState])
 
 	// Start the timer only once the playable board is mounted (loading excluded).
 	useEffect(() => {
@@ -276,10 +289,7 @@ function LoadedGameScreen({
 				visible={state.status === 'completed'}
 				elapsedLabel={formatElapsed(state.timerAccumulatedMs)}
 				onNewGame={() => onRequestNewGame()}
-				onReplay={() => {
-					dispatch({ type: 'REPLAY' })
-					dispatch({ type: 'TIMER_RESUME', now: Date.now() })
-				}}
+				onReplay={replay}
 			/>
 		</View>
 	)
