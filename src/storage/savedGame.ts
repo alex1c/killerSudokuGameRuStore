@@ -4,8 +4,12 @@
  */
 
 import type { Difficulty } from '../game/difficulty'
-import type { KillerCage, KillerPuzzle } from '../game/killer'
-import type { SudokuBoard } from '../game/sudoku'
+import {
+	validateKillerPuzzle,
+	type KillerCage,
+	type KillerPuzzle,
+} from '../game/killer'
+import { isValidSudoku, type SudokuBoard } from '../game/sudoku'
 import type { GameState } from '../gameplay'
 
 export const SAVED_GAME_SCHEMA_VERSION = 1 as const
@@ -51,6 +55,20 @@ function isNumberArray(value: unknown, length: number): value is number[] {
 	)
 }
 
+function isIntegerArrayInRange(
+	value: unknown,
+	length: number,
+	min: number,
+	max: number,
+): value is number[] {
+	return (
+		isNumberArray(value, length) &&
+		value.every(
+			(item) => Number.isInteger(item) && item >= min && item <= max,
+		)
+	)
+}
+
 function isValidCage(value: unknown): value is KillerCage {
 	if (value === null || typeof value !== 'object') {
 		return false
@@ -58,7 +76,7 @@ function isValidCage(value: unknown): value is KillerCage {
 	const cage = value as Partial<KillerCage>
 	return (
 		typeof cage.id === 'string' &&
-		typeof cage.sum === 'number' &&
+		Number.isFinite(cage.sum) &&
 		Array.isArray(cage.cells) &&
 		cage.cells.every(
 			(cell) =>
@@ -68,6 +86,23 @@ function isValidCage(value: unknown): value is KillerCage {
 				cell < 81,
 		)
 	)
+}
+
+function isValidPersistedPuzzle(
+	puzzle: SerializedKillerPuzzleV1,
+): boolean {
+	if (!isValidSudoku(puzzle.solution) || !isValidSudoku(puzzle.board)) {
+		return false
+	}
+	for (let i = 0; i < puzzle.board.length; i += 1) {
+		if (puzzle.board[i] !== 0 && puzzle.board[i] !== puzzle.solution[i]) {
+			return false
+		}
+	}
+	return validateKillerPuzzle({
+		solution: puzzle.solution,
+		cages: puzzle.cages,
+	}).valid
 }
 
 /**
@@ -150,13 +185,16 @@ export function parseSavedGame(raw: string | null): LoadSavedGameResult {
 	) {
 		return { ok: false, reason: 'bad-elapsed' }
 	}
-	if (typeof candidate.savedAt !== 'number') {
+	if (
+		typeof candidate.savedAt !== 'number' ||
+		!Number.isFinite(candidate.savedAt)
+	) {
 		return { ok: false, reason: 'bad-savedAt' }
 	}
-	if (!isNumberArray(candidate.values, 81)) {
+	if (!isIntegerArrayInRange(candidate.values, 81, 0, 9)) {
 		return { ok: false, reason: 'bad-values' }
 	}
-	if (!isNumberArray(candidate.notes, 81)) {
+	if (!isIntegerArrayInRange(candidate.notes, 81, 0, 0b1111111110)) {
 		return { ok: false, reason: 'bad-notes' }
 	}
 
@@ -175,10 +213,16 @@ export function parseSavedGame(raw: string | null): LoadSavedGameResult {
 	}
 	if (
 		typeof puzzle.seed !== 'number' ||
+		!Number.isFinite(puzzle.seed) ||
 		typeof puzzle.attempt !== 'number' ||
+		!Number.isInteger(puzzle.attempt) ||
+		puzzle.attempt < 0 ||
 		puzzle.difficultyPreset !== candidate.difficulty
 	) {
 		return { ok: false, reason: 'bad-puzzle-meta' }
+	}
+	if (!isValidPersistedPuzzle(puzzle as SerializedKillerPuzzleV1)) {
+		return { ok: false, reason: 'invalid-puzzle' }
 	}
 
 	return {

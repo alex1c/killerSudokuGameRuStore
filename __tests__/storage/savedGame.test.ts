@@ -21,12 +21,13 @@ import {
 
 function makePuzzle(): KillerPuzzle {
 	const board = createEmptyBoard()
-	board[0] = 5
 	const solution = createEmptyBoard()
 	for (let i = 0; i < 81; i += 1) {
-		solution[i] = (i % 9) + 1
+		const row = Math.floor(i / 9)
+		const col = i % 9
+		solution[i] = ((row * 3 + Math.floor(row / 3) + col) % 9) + 1
 	}
-	solution[0] = 5
+	board[0] = solution[0]!
 	const cages: KillerCage[] = Array.from({ length: 81 }, (_, cell) => ({
 		id: `c${cell}`,
 		sum: solution[cell]!,
@@ -87,9 +88,21 @@ describe('saved game schema', () => {
 		saved.values = [1, 2]
 		expect(parseSavedGame(JSON.stringify(saved)).ok).toBe(false)
 
+		const savedValues = serializeSavedGame(createGameFromPuzzle(makePuzzle()))
+		savedValues.values[1] = 10
+		expect(parseSavedGame(JSON.stringify(savedValues)).ok).toBe(false)
+
 		const saved2 = serializeSavedGame(createGameFromPuzzle(makePuzzle()))
 		saved2.puzzle.cages = [{ id: 'x', sum: 1, cells: [999] }]
 		expect(parseSavedGame(JSON.stringify(saved2)).ok).toBe(false)
+
+		const saved3 = serializeSavedGame(createGameFromPuzzle(makePuzzle()))
+		saved3.puzzle.cages[1]!.cells = [0]
+		expect(parseSavedGame(JSON.stringify(saved3)).ok).toBe(false)
+
+		const saved4 = serializeSavedGame(createGameFromPuzzle(makePuzzle()))
+		saved4.puzzle.cages[0]!.sum += 1
+		expect(parseSavedGame(JSON.stringify(saved4)).ok).toBe(false)
 	})
 })
 
