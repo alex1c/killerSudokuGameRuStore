@@ -34,6 +34,7 @@
     "test:engine:stress": "tsx scripts/stress-engine.ts",
     "test:engine:stress:difficulty": "tsx scripts/stress-difficulty.ts",
     "profile:generator": "tsx scripts/profile-generator.ts",
+    "analyze:difficulty": "tsx scripts/analyze-difficulty.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"
   },

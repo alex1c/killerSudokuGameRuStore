@@ -1,0 +1,119 @@
+import { CLASSIC_PUZZLE } from '../../fixtures/sudoku'
+import { getCageCombinations } from '../../../src/game/killer/combinations'
+import {
+	applyLogicalStep,
+	findNextLogicalStep,
+	gradeDifficulty,
+	initializeLogicalState,
+	solveLogically,
+	FULL_CANDIDATE_MASK,
+	type LogicalPuzzle,
+	type LogicalState,
+} from '../../../src/game/logic'
+
+const emptyPuzzle: LogicalPuzzle = { board: Array(81).fill(0), cages: [] }
+const fullState = (): LogicalState => ({ values: Array(81).fill(0), candidates: Array(81).fill(FULL_CANDIDATE_MASK) })
+
+describe('logical solver', () => {
+	it('finds and applies a naked single without mutating the input', () => {
+		const state = fullState()
+		state.candidates[0] = 1 << 7 | 1 << 8
+		state.candidates[1] = 1 << 7
+		const before = state.values.slice()
+		const found = findNextLogicalStep(emptyPuzzle, state)
+		expect(found?.technique).toBe('naked_single')
+		expect(found?.placements).toEqual([{ cell: 1, digit: 7 }])
+		const next = applyLogicalStep(state, found!)
+		expect(next.values[1]).toBe(7)
+		expect(state.values).toEqual(before)
+	})
+
+	it.each([
+		['row', 0, [0, 1]],
+		['column', 0, [0, 9]],
+		['box', 0, [0, 1]],
+	] as const)('finds a hidden single in a %s', (unit, _index, cells) => {
+		const state = fullState()
+		const unitCells = unit === 'row' ? Array.from({ length: 9 }, (_, cell) => cell) : unit === 'column' ? Array.from({ length: 9 }, (_, cell) => cell * 9) : [0, 1, 2, 9, 10, 11, 18, 19, 20]
+		for (const cell of unitCells) state.candidates[cell] = state.candidates[cell]! & ~(1 << 7)
+		state.candidates[cells[0]] = (1 << 7) | (1 << 8)
+		state.candidates[cells[1]] = (1 << 8) | (1 << 9)
+		const found = findNextLogicalStep(emptyPuzzle, state)
+		expect(found?.technique).toBe('hidden_single')
+		expect(found?.explanationData.unit).toBe(unit)
+		expect(found?.placements[0]?.digit).toBe(7)
+	})
+
+	it('finds a cage single from the target sum', () => {
+		const puzzle: LogicalPuzzle = { board: [0, 5, ...Array(79).fill(0)], cages: [{ id: 'c1', sum: 12, cells: [0, 1] }] }
+		const state = fullState()
+		state.values[1] = 5
+		state.candidates[0] = FULL_CANDIDATE_MASK
+		const found = findNextLogicalStep(puzzle, state)
+		expect(found?.technique).toBe('cage_single')
+		expect(found?.placements).toEqual([{ cell: 0, digit: 7 }])
+	})
+
+	it('uses cage combinations and reports candidate eliminations', () => {
+		const puzzle: LogicalPuzzle = { board: Array(81).fill(0), cages: [{ id: 'c1', sum: 3, cells: [0, 1] }] }
+		const found = findNextLogicalStep(puzzle, fullState())
+		expect(getCageCombinations(2, 3)).toEqual([[1, 2]])
+		expect(found?.technique).toBe('cage_combination')
+		expect(found?.eliminations.length).toBeGreaterThan(0)
+	})
+
+	it('finds a mathematically valid locked candidate', () => {
+		const state = fullState()
+		for (let cell = 2; cell < 9; cell += 1) state.candidates[cell] = state.candidates[cell]! & ~(1 << 1)
+		state.candidates[0] = (1 << 1) | (1 << 2)
+		state.candidates[1] = (1 << 1) | (1 << 2) | (1 << 3)
+		state.candidates[9] = (1 << 1) | (1 << 4)
+		const found = findNextLogicalStep(emptyPuzzle, state)
+		expect(found?.technique).toBe('locked_candidate')
+		expect(found?.eliminations).toContainEqual({ cell: 9, digit: 1 })
+	})
+
+	it('uses Rule of 45 to eliminate unsupported pair digits', () => {
+		const state = fullState()
+		for (let cell = 2; cell < 9; cell += 1) state.values[cell] = cell - 1
+		for (let cell = 9; cell < 21; cell += 1) state.candidates[cell] = FULL_CANDIDATE_MASK & ~(1 << 1) & ~(1 << 8) & ~(1 << 9)
+		state.candidates[0] = (1 << 1) | (1 << 8) | (1 << 9)
+		state.candidates[1] = (1 << 1) | (1 << 8) | (1 << 9)
+		const found = findNextLogicalStep(emptyPuzzle, state)
+		expect(found?.technique).toBe('rule_of_45')
+		expect(found?.eliminations).toContainEqual({ cell: 0, digit: 1 })
+	})
+
+	it('uses cage intersection only for digits forced by every cage combination', () => {
+		const puzzle: LogicalPuzzle = { board: Array(81).fill(0), cages: [{ id: 'c1', sum: 3, cells: [0, 1] }] }
+		const state = fullState()
+		state.candidates[0] = (1 << 1) | (1 << 2)
+		state.candidates[1] = (1 << 1) | (1 << 2)
+		const found = findNextLogicalStep(puzzle, state)
+		expect(found?.technique).toBe('cage_intersection')
+		expect(found?.eliminations).toContainEqual({ cell: 2, digit: 1 })
+	})
+
+	it('keeps ordinary cage elimination distinct from cage intersection', () => {
+		const puzzle: LogicalPuzzle = { board: Array(81).fill(0), cages: [{ id: 'c1', sum: 10, cells: [0, 1] }] }
+		expect(findNextLogicalStep(puzzle, fullState())?.technique).toBe('cage_candidate_elimination')
+	})
+
+	it('stalls honestly instead of invoking search', () => {
+		const result = solveLogically(emptyPuzzle)
+		expect(result.solved).toBe(false)
+		expect(result.stalled).toBe(true)
+		expect(result.steps).toEqual([])
+	})
+
+	it('is deterministic, non-mutating, and grades a logically solved classic puzzle', () => {
+		const puzzle: LogicalPuzzle = { board: CLASSIC_PUZZLE, cages: [] }
+		const before = puzzle.board.slice()
+		const first = gradeDifficulty(puzzle)
+		const second = gradeDifficulty(puzzle)
+		expect(first).toEqual(second)
+		expect(puzzle.board).toEqual(before)
+		expect(first.solvedLogically).toBe(true)
+		expect(initializeLogicalState(puzzle).values).toEqual(before)
+	})
+})

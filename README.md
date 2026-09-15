@@ -161,3 +161,8 @@ Highlights:
 - No Hint / Daily / stats / ads / AppMetrica / Master difficulty / dark theme yet
 - Conflicts are explicit-rule only mid-game (solution checked only at completion)
 - Cage borders use inset solid lines (RN dashed borders are unreliable)
+## Phase 5 logical solver
+
+The project now contains a pure TypeScript, human-oriented logical solver and transparent difficulty grader in `src/game/logic`. It records structured steps for Sudoku and Killer techniques, supports an honest `unrated` result when the implemented techniques stall, and never falls back to the authoritative search solver. Run `npm run analyze:difficulty` to sample 100 puzzles per generation preset and print the confusion matrix, solved/stalled rate, technique distribution, and grading performance.
+
+The existing generator presets are not calibrated to the grader yet. Smart Hint UI is not implemented.
