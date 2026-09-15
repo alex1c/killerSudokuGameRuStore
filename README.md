@@ -175,4 +175,15 @@ npm run analyze:calibrated-difficulty
 
 Reports acceptance rate, attempts, timing, givens, and hardest-technique distribution for 100 accepted puzzles per level.
 
+## Phase 6P — generation performance
+
+Hermes was spending most of Hard/Expert time on an empty-board cage-only uniqueness probe (almost never unique) plus repeated solver rebuilds during dig. Generation now:
+
+* skips the empty-board cage-only probe;
+* digs with an incremental solver state + alternate-solution search;
+* binary-searches calibration fill length to cut grader calls;
+* exposes stage profiles via `generateKillerPuzzle({ profile: true })`.
+
+Dev screen: **Run Generator Perf QA** (Easy×3 / Medium×3 / Hard×5 / Expert×5, Metro excluded).
+
 The existing generator presets are not calibrated to the grader yet. Smart Hint UI is not implemented.

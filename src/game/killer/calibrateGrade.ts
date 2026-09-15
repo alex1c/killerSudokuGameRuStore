@@ -3,6 +3,9 @@
  *
  * Search uniqueness is already established. This module only adjusts givens
  * (never cages) and asks gradeDifficulty — it does not change grader weights.
+ *
+ * Phase 6P: binary search on fill-prefix length to cut logical-grader calls,
+ * then a short linear refine. Final board always passes a full gradeDifficulty.
  */
 
 import type { Difficulty } from '../difficulty'
@@ -37,6 +40,8 @@ export interface CalibrateBoardResult {
 	board: SudokuBoard
 	grade: DifficultyLevel
 	givensAdded: number
+	/** How many full gradeDifficulty calls ran during calibration. */
+	logicalSolverCalls: number
 }
 
 /**
@@ -61,12 +66,40 @@ export function buildGivenFillOrder(
 }
 
 /**
+ * Apply the first `count` fill-order cells as givens from the solution.
+ */
+function applyFillPrefix(
+	base: SudokuBoard,
+	solution: SudokuBoard,
+	fillOrder: readonly number[],
+	count: number,
+): SudokuBoard {
+	const board = cloneBoard(base)
+	let added = 0
+	for (let i = 0; i < fillOrder.length && added < count; i += 1) {
+		const cell = fillOrder[i]!
+		if ((board[cell] ?? 0) !== 0) {
+			continue
+		}
+		const digit = solution[cell] ?? 0
+		if (digit < 1 || digit > 9) {
+			continue
+		}
+		board[cell] = digit
+		added += 1
+	}
+	return board
+}
+
+/**
  * Adjust givens so gradeDifficulty(board) === target.
  *
  * - If already target → return as-is.
  * - If too easy → impossible by adding givens → null.
- * - If too hard / unrated → re-add solution digits in fill order until target.
- *   Overshooting to easier than target undoes that given and continues.
+ * - If too hard / unrated → re-add solution digits until target.
+ *
+ * Uses binary search on fill-prefix length (grade is roughly monotonic in
+ * given count), then linear refine with overshoot undo for exact landing.
  */
 export function calibrateBoardToGrade(options: {
 	solution: SudokuBoard
@@ -77,12 +110,24 @@ export function calibrateBoardToGrade(options: {
 	fillSeed: number
 }): CalibrateBoardResult | null {
 	const { solution, cages, target, fillSeed } = options
-	const board = cloneBoard(options.board)
-	let grade = gradeDifficulty({ board, cages })
+	const base = cloneBoard(options.board)
+	let logicalSolverCalls = 0
+
+	const gradeOnce = (board: SudokuBoard) => {
+		logicalSolverCalls += 1
+		return gradeDifficulty({ board, cages })
+	}
+
+	let grade = gradeOnce(base)
 	const targetRank = difficultyRank(target)
 
 	if (grade.level === target) {
-		return { board, grade: grade.level, givensAdded: 0 }
+		return {
+			board: base,
+			grade: grade.level,
+			givensAdded: 0,
+			logicalSolverCalls,
+		}
 	}
 
 	if (difficultyRank(grade.level) < targetRank) {
@@ -90,13 +135,62 @@ export function calibrateBoardToGrade(options: {
 	}
 
 	const fillOrder = buildGivenFillOrder(
-		board,
+		base,
 		options.removedCells,
 		fillSeed,
 	)
-	let givensAdded = 0
+	const maxFill = fillOrder.length
 
-	for (const cell of fillOrder) {
+	// Binary search: more givens → easier grade (approximately monotonic).
+	let low = 0
+	let high = maxFill
+	let hitPrefix = -1
+
+	while (low <= high) {
+		const mid = (low + high) >> 1
+		const candidate = applyFillPrefix(base, solution, fillOrder, mid)
+		grade = gradeOnce(candidate)
+		const rank = difficultyRank(grade.level)
+		if (grade.level === target) {
+			hitPrefix = mid
+			// Prefer fewer givens when multiple prefixes grade as target.
+			high = mid - 1
+		} else if (rank > targetRank) {
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+
+	if (hitPrefix >= 0) {
+		const board = applyFillPrefix(base, solution, fillOrder, hitPrefix)
+		const finalGrade = gradeOnce(board)
+		if (finalGrade.level === target) {
+			return {
+				board,
+				grade: finalGrade.level,
+				givensAdded: hitPrefix,
+				logicalSolverCalls,
+			}
+		}
+	}
+
+	// Linear refine from the binary-search bracket (handles non-monotonic edges).
+	const start = Math.max(0, high)
+	const board = applyFillPrefix(base, solution, fillOrder, start)
+	let givensAdded = start
+	grade = gradeOnce(board)
+	if (grade.level === target) {
+		return {
+			board,
+			grade: grade.level,
+			givensAdded,
+			logicalSolverCalls,
+		}
+	}
+
+	for (let i = start; i < fillOrder.length; i += 1) {
+		const cell = fillOrder[i]!
 		if ((board[cell] ?? 0) !== 0) {
 			continue
 		}
@@ -106,20 +200,29 @@ export function calibrateBoardToGrade(options: {
 		}
 		board[cell] = digit
 		givensAdded += 1
-		grade = gradeDifficulty({ board, cages })
+		grade = gradeOnce(board)
 		if (grade.level === target) {
-			return { board, grade: grade.level, givensAdded }
+			return {
+				board,
+				grade: grade.level,
+				givensAdded,
+				logicalSolverCalls,
+			}
 		}
 		if (difficultyRank(grade.level) < targetRank) {
-			// Overshot below target — undo and try another cell.
 			board[cell] = 0
 			givensAdded -= 1
 		}
 	}
 
-	grade = gradeDifficulty({ board, cages })
+	grade = gradeOnce(board)
 	if (grade.level === target) {
-		return { board, grade: grade.level, givensAdded }
+		return {
+			board,
+			grade: grade.level,
+			givensAdded,
+			logicalSolverCalls,
+		}
 	}
 	return null
 }

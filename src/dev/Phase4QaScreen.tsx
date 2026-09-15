@@ -20,6 +20,10 @@ import {
 	runPhase4Qa,
 	type Phase4QaResult,
 } from './phase4Qa'
+import {
+	runGeneratorPerfQa,
+	type GeneratorPerfQaResult,
+} from './generatorPerfQa'
 import { asyncStorageAdapter } from '../storage/asyncStorageAdapter'
 import { PHASE4_QA_STORAGE_KEY } from '../storage'
 
@@ -27,12 +31,14 @@ export interface Phase4QaScreenProps {
 	onBack: () => void
 }
 
-type RunKind = 'persistence' | 'generator' | 'all' | null
+type RunKind = 'persistence' | 'generator' | 'perf' | 'all' | null
 
 export function Phase4QaScreen(props: Phase4QaScreenProps) {
 	const insets = useSafeAreaInsets()
 	const [running, setRunning] = useState<RunKind>(null)
-	const [result, setResult] = useState<Phase4QaResult | null>(null)
+	const [result, setResult] = useState<
+		Phase4QaResult | GeneratorPerfQaResult | null
+	>(null)
 
 	const run = useCallback(async (kind: Exclude<RunKind, null>) => {
 		setRunning(kind)
@@ -47,7 +53,9 @@ export function Phase4QaScreen(props: Phase4QaScreenProps) {
 					? await runPhase4PersistenceQa(options)
 					: kind === 'generator'
 						? await runPhase4GeneratorQa(options)
-						: await runPhase4Qa(options)
+						: kind === 'perf'
+							? await runGeneratorPerfQa()
+							: await runPhase4Qa(options)
 			setResult(next)
 		} catch (error) {
 			setResult({
@@ -102,6 +110,11 @@ export function Phase4QaScreen(props: Phase4QaScreenProps) {
 					label="Run Generator QA"
 					disabled={running !== null}
 					onPress={() => void run('generator')}
+				/>
+				<QaButton
+					label="Run Generator Perf QA"
+					disabled={running !== null}
+					onPress={() => void run('perf')}
 				/>
 				<QaButton
 					label="Run All"

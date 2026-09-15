@@ -69,6 +69,10 @@ export const DEFAULT_CAGE_PRESET: CageGenerationPreset = {
 /**
  * Proposal profiles tuned so grade-filtered acceptance is frequent enough
  * for mobile (see Phase 6 acceptance-rate targets).
+ *
+ * Phase 6P: dig targets sit near observed final empty counts so Hermes does
+ * not pay for dozens of ultra-sparse uniqueness probes that calibration
+ * would only fill back in.
  */
 export const CAGE_PRESETS: Record<Difficulty, CageGenerationPreset> = {
 	easy: {
@@ -78,8 +82,8 @@ export const CAGE_PRESETS: Record<Difficulty, CageGenerationPreset> = {
 		sizeWeights: [75, 25],
 		maxAttempts: 25,
 		allowSingletons: false,
-		// Dig far enough that some candidates overshoot; re-add givens to Easy.
-		maxEmptyCells: 55,
+		// Slightly below avg empties so calibrate rarely needs many fills.
+		maxEmptyCells: 58,
 		cageOnlyNodeLimit: 40_000,
 		digNodeLimit: 16_000,
 	},
@@ -91,7 +95,8 @@ export const CAGE_PRESETS: Record<Difficulty, CageGenerationPreset> = {
 		sizeWeights: [25, 30, 30, 15],
 		maxAttempts: 40,
 		allowSingletons: false,
-		maxEmptyCells: 76,
+		// Phase 6 landed ~13.5 givens (≈67 empties); dig a bit past that.
+		maxEmptyCells: 72,
 		cageOnlyNodeLimit: 100_000,
 		digNodeLimit: 35_000,
 	},
@@ -102,7 +107,8 @@ export const CAGE_PRESETS: Record<Difficulty, CageGenerationPreset> = {
 		sizeWeights: [25, 30, 30, 15],
 		maxAttempts: 40,
 		allowSingletons: false,
-		maxEmptyCells: 78,
+		// Phase 6 landed ~9.8 givens (≈71 empties).
+		maxEmptyCells: 74,
 		cageOnlyNodeLimit: 100_000,
 		digNodeLimit: 35_000,
 	},

@@ -29,8 +29,10 @@ export {
 	solveKillerSudoku,
 	countKillerSolutions,
 	hasUniqueKillerSolution,
+	digGivensIncremental,
 	DEFAULT_KILLER_NODE_LIMIT,
 	type KillerPuzzleInput,
+	type DigUniquenessResult,
 } from './solver'
 
 export {
@@ -50,3 +52,11 @@ export {
 	buildGivenFillOrder,
 	type CalibrateBoardResult,
 } from './calibrateGrade'
+
+export {
+	createEmptyAttemptProfile,
+	summarizeGenerationProfile,
+	formatGenerationProfile,
+	type GenerationAttemptProfile,
+	type GenerationProfile,
+} from './generationProfile'

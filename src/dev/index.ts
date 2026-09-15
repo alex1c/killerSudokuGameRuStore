@@ -17,4 +17,15 @@ export type {
 	Phase4QaOptions,
 	Phase4QaGeneratorPresetSummary,
 } from './phase4Qa'
+export {
+	runGeneratorPerfQa,
+	logGeneratorPerfQaSummary,
+	GENERATOR_PERF_RUNS,
+} from './generatorPerfQa'
+export type {
+	GeneratorPerfQaResult,
+	GeneratorPerfQaOptions,
+	GeneratorPerfPresetSummary,
+	GeneratorPerfRunRow,
+} from './generatorPerfQa'
 export { Phase4QaScreen } from './Phase4QaScreen'

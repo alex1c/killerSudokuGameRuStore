@@ -34,6 +34,7 @@
     "test:engine:stress": "tsx scripts/stress-engine.ts",
     "test:engine:stress:difficulty": "tsx scripts/stress-difficulty.ts",
     "profile:generator": "tsx scripts/profile-generator.ts",
+    "profile:generation-stages": "tsx scripts/profile-generation-stages.ts",
     "analyze:difficulty": "tsx scripts/analyze-difficulty.ts",
     "analyze:calibrated-difficulty": "tsx scripts/analyze-calibrated-difficulty.ts",
     "audit:logic": "tsx scripts/audit-logic.ts",
