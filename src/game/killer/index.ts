@@ -35,7 +35,18 @@ export {
 
 export {
 	generateKillerPuzzle,
+	tryCalibratedKillerAttempt,
 	KillerPuzzleGenerationError,
+	digGivensWithOrder,
 	type GenerateKillerPuzzleOptions,
 	type KillerPuzzle,
+	type DigGivensResult,
+	type CalibratedAttemptResult,
 } from './generateKillerPuzzle'
+
+export {
+	calibrateBoardToGrade,
+	difficultyRank,
+	buildGivenFillOrder,
+	type CalibrateBoardResult,
+} from './calibrateGrade'

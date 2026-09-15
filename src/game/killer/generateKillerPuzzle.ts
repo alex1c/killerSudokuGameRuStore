@@ -1,10 +1,11 @@
 /**
- * Full Killer Sudoku puzzle generation pipeline (Phase 4 performance).
+ * Calibrated Killer Sudoku puzzle generation (Phase 6).
  *
- * seed → solved board → cages → uniqueness → optional dig → puzzle
+ * seed → solved board → cages → uniqueness dig → grade calibrate → puzzle
  *
- * Dig is capped by preset.maxEmptyCells and soft node budgets so mobile
- * devices do not spend tens of seconds proving uniqueness on sparse boards.
+ * Search solver (`countKillerSolutions`) owns uniqueness.
+ * Logical grader (`gradeDifficulty`) owns human difficulty acceptance.
+ * Wrong grades and `unrated` are rejected — never silently remapped.
  */
 
 import { createSeededRandom, shuffledCopy } from '../../utils/seededRandom'
@@ -13,6 +14,7 @@ import {
 	type Difficulty,
 	type CageGenerationPreset,
 } from '../difficulty'
+import { gradeDifficulty } from '../logic'
 import { generateSolvedBoard } from '../sudoku/generateSolvedBoard'
 import {
 	BOARD_CELLS,
@@ -20,6 +22,7 @@ import {
 	createEmptyBoard,
 	type SudokuBoard,
 } from '../sudoku/types'
+import { calibrateBoardToGrade } from './calibrateGrade'
 import { generateKillerCages } from './cageGenerator'
 import { type KillerCage } from './cages'
 import { countKillerSolutions } from './solver'
@@ -45,12 +48,19 @@ export interface KillerPuzzle {
 export class KillerPuzzleGenerationError extends Error {
 	readonly seed: number
 	readonly attempts: number
+	readonly targetDifficulty: Difficulty
 
-	constructor(seed: number, attempts: number, message: string) {
+	constructor(
+		seed: number,
+		attempts: number,
+		targetDifficulty: Difficulty,
+		message: string,
+	) {
 		super(message)
 		this.name = 'KillerPuzzleGenerationError'
 		this.seed = seed
 		this.attempts = attempts
+		this.targetDifficulty = targetDifficulty
 	}
 }
 
@@ -90,16 +100,22 @@ function solutionMatchesPuzzle(
 	return true
 }
 
+export interface DigGivensResult {
+	board: SudokuBoard
+	/** Cells successfully emptied, in dig order (first removed first). */
+	removedCells: number[]
+}
+
 /**
  * Dig givens from a full solution while uniqueness holds.
- * Stops early when maxEmptyCells is reached to keep dig cheap on device.
+ * Records removal order so calibrateBoardToGrade can re-add deterministically.
  */
-function minimizeGivens(
+export function digGivensWithOrder(
 	solution: SudokuBoard,
 	cages: readonly KillerCage[],
 	seed: number,
 	preset: CageGenerationPreset,
-): SudokuBoard {
+): DigGivensResult {
 	const board = cloneBoard(solution)
 	const rng = createSeededRandom(seed >>> 0)
 	const order = shuffledCopy(
@@ -107,6 +123,7 @@ function minimizeGivens(
 		rng,
 	)
 
+	const removedCells: number[] = []
 	let emptyCount = 0
 	for (const index of order) {
 		if (emptyCount >= preset.maxEmptyCells) {
@@ -126,10 +143,11 @@ function minimizeGivens(
 			board[index] = backup
 		} else {
 			emptyCount += 1
+			removedCells.push(index)
 		}
 	}
 
-	return board
+	return { board, removedCells }
 }
 
 /** Monotonic clock for generation instrumentation (dev + profiling). */
@@ -143,8 +161,167 @@ function monotonicMs(): number {
 	return Date.now()
 }
 
+export type CalibratedAttemptResult =
+	| { ok: true; puzzle: KillerPuzzle }
+	| {
+			ok: false
+			reason:
+				| 'validation'
+				| 'non-unique'
+				| 'solver-mismatch'
+				| 'rejected-unrated'
+				| 'rejected-wrong-grade'
+				| 'calibrate-mismatch'
+				| 'error'
+			detail?: string
+			observedGrade?: string
+	  }
+
 /**
- * Generate a validated unique Killer puzzle for the given seed.
+ * One deterministic proposal attempt for (baseSeed, attempt, preset).
+ * Used by generateKillerPuzzle and calibrated yield analysis.
+ */
+export function tryCalibratedKillerAttempt(options: {
+	baseSeed: number
+	attempt: number
+	preset: CageGenerationPreset
+}): CalibratedAttemptResult {
+	const { baseSeed, attempt, preset } = options
+	const target = preset.id
+	const boardSeed = (baseSeed + attempt * 0x9e3779b9) >>> 0
+	const cageSeed = (baseSeed ^ (attempt * 0x85ebca6b)) >>> 0
+	const digSeed = (baseSeed + attempt * 0xc2b2ae35) >>> 0
+	const fillSeed = (baseSeed ^ (attempt * 0x27d4eb2d)) >>> 0
+
+	try {
+		const solution = generateSolvedBoard(boardSeed)
+		const cages = generateKillerCages(solution, cageSeed, { preset })
+
+		const validation = validateKillerPuzzle({ solution, cages })
+		if (!validation.valid) {
+			return {
+				ok: false,
+				reason: 'validation',
+				detail: validation.errors.map((error) => error.code).join(','),
+			}
+		}
+
+		let board = createEmptyBoard()
+		let removedCells: number[] = []
+		let solutionCount = countKillerSolutions(
+			{ board, cages },
+			2,
+			preset.cageOnlyNodeLimit,
+		)
+
+		if (solutionCount !== 1) {
+			const dug = digGivensWithOrder(
+				solution,
+				cages,
+				digSeed,
+				preset,
+			)
+			board = dug.board
+			removedCells = dug.removedCells
+			solutionCount = countKillerSolutions(
+				{ board, cages },
+				2,
+				preset.digNodeLimit,
+			)
+			if (solutionCount !== 1) {
+				return {
+					ok: false,
+					reason: 'non-unique',
+					detail: String(solutionCount),
+				}
+			}
+		}
+
+		if (!solutionMatchesPuzzle(solution, board, cages)) {
+			return { ok: false, reason: 'solver-mismatch' }
+		}
+
+		const calibrated = calibrateBoardToGrade({
+			solution,
+			cages,
+			board,
+			removedCells,
+			target,
+			fillSeed,
+		})
+
+		if (calibrated === null) {
+			const observed = gradeDifficulty({ board, cages }).level
+			if (observed === 'unrated') {
+				return {
+					ok: false,
+					reason: 'rejected-unrated',
+					observedGrade: observed,
+				}
+			}
+			return {
+				ok: false,
+				reason: 'rejected-wrong-grade',
+				observedGrade: observed,
+			}
+		}
+
+		if (calibrated.grade === 'unrated') {
+			return {
+				ok: false,
+				reason: 'rejected-unrated',
+				observedGrade: 'unrated',
+			}
+		}
+
+		if (calibrated.grade !== target) {
+			return {
+				ok: false,
+				reason: 'rejected-wrong-grade',
+				observedGrade: calibrated.grade,
+			}
+		}
+
+		if (!solutionMatchesPuzzle(solution, calibrated.board, cages)) {
+			return { ok: false, reason: 'calibrate-mismatch' }
+		}
+
+		const finalCount = countKillerSolutions(
+			{ board: calibrated.board, cages },
+			2,
+			preset.digNodeLimit,
+		)
+		if (finalCount !== 1) {
+			return {
+				ok: false,
+				reason: 'non-unique',
+				detail: `after-calibrate:${finalCount}`,
+			}
+		}
+
+		return {
+			ok: true,
+			puzzle: {
+				seed: baseSeed,
+				attempt,
+				difficultyPreset: target,
+				board: calibrated.board,
+				solution,
+				cages,
+			},
+		}
+	} catch (error) {
+		return {
+			ok: false,
+			reason: 'error',
+			detail: error instanceof Error ? error.message : String(error),
+		}
+	}
+}
+
+/**
+ * Generate a validated unique Killer puzzle whose logical grade matches
+ * the requested difficulty. Deterministic for the same seed + difficulty.
  */
 export function generateKillerPuzzle(
 	options: GenerateKillerPuzzleOptions,
@@ -152,82 +329,42 @@ export function generateKillerPuzzle(
 	const baseSeed = options.seed >>> 0
 	const preset =
 		options.preset ?? getCagePreset(options.difficultyPreset)
+	const target = preset.id
 	const maxAttempts = options.maxAttempts ?? preset.maxAttempts
 	const startedMs = monotonicMs()
 
 	let lastError = 'unknown failure'
 
 	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-		const boardSeed = (baseSeed + attempt * 0x9e3779b9) >>> 0
-		const cageSeed = (baseSeed ^ (attempt * 0x85ebca6b)) >>> 0
-		const digSeed = (baseSeed + attempt * 0xc2b2ae35) >>> 0
-
-		try {
-			const solution = generateSolvedBoard(boardSeed)
-			const cages = generateKillerCages(solution, cageSeed, {
-				preset,
-			})
-
-			const validation = validateKillerPuzzle({ solution, cages })
-			if (!validation.valid) {
-				lastError = validation.errors
-					.map((error) => error.code)
-					.join(',')
-				continue
-			}
-
-			let board = createEmptyBoard()
-			let solutionCount = countKillerSolutions(
-				{ board, cages },
-				2,
-				preset.cageOnlyNodeLimit,
-			)
-
-			if (solutionCount !== 1) {
-				board = minimizeGivens(solution, cages, digSeed, preset)
-				solutionCount = countKillerSolutions(
-					{ board, cages },
-					2,
-					preset.digNodeLimit,
-				)
-				if (solutionCount !== 1) {
-					lastError = `non-unique-after-dig:${solutionCount}`
-					continue
-				}
-			}
-
-			if (!solutionMatchesPuzzle(solution, board, cages)) {
-				lastError = 'solver-mismatch'
-				continue
-			}
-
-			const puzzle: KillerPuzzle = {
-				seed: baseSeed,
-				attempt,
-				difficultyPreset: preset.id,
-				board,
-				solution,
-				cages,
-			}
-
-			// Development-only: actual engine generation time (not UI loading).
+		const result = tryCalibratedKillerAttempt({
+			baseSeed,
+			attempt,
+			preset,
+		})
+		if (result.ok) {
 			if (typeof __DEV__ !== 'undefined' && __DEV__) {
 				const generationMs = monotonicMs() - startedMs
 				console.log(
-					`[KILLER_GEN] difficulty=${preset.id} seed=${baseSeed} generationMs=${generationMs.toFixed(1)}`,
+					`[KILLER_GEN] difficulty=${target} seed=${baseSeed} attempt=${attempt} generationMs=${generationMs.toFixed(1)} grade=${target}`,
 				)
 			}
-
-			return puzzle
-		} catch (error) {
-			lastError =
-				error instanceof Error ? error.message : String(error)
+			return result.puzzle
 		}
+
+		lastError =
+			result.reason === 'rejected-wrong-grade'
+				? `rejected-wrong-grade:${result.observedGrade ?? '?'}`
+				: result.reason === 'rejected-unrated'
+					? 'rejected-unrated'
+					: result.detail
+						? `${result.reason}:${result.detail}`
+						: result.reason
 	}
 
 	throw new KillerPuzzleGenerationError(
 		baseSeed,
 		maxAttempts,
-		`Failed to generate unique Killer puzzle for seed=${baseSeed} after ${maxAttempts} attempts (${lastError})`,
+		target,
+		`Failed to generate graded Killer puzzle target=${target} seed=${baseSeed} after ${maxAttempts} attempts (${lastError})`,
 	)
 }

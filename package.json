@@ -35,6 +35,7 @@
     "test:engine:stress:difficulty": "tsx scripts/stress-difficulty.ts",
     "profile:generator": "tsx scripts/profile-generator.ts",
     "analyze:difficulty": "tsx scripts/analyze-difficulty.ts",
+    "analyze:calibrated-difficulty": "tsx scripts/analyze-calibrated-difficulty.ts",
     "audit:logic": "tsx scripts/audit-logic.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0"

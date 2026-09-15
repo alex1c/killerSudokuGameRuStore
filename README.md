@@ -163,6 +163,16 @@ Highlights:
 - Cage borders use inset solid lines (RN dashed borders are unreliable)
 ## Phase 5 logical solver
 
-The project now contains a pure TypeScript, human-oriented logical solver and transparent difficulty grader in `src/game/logic`. It records structured steps for Sudoku and Killer techniques, supports an honest `unrated` result when the implemented techniques stall, and never falls back to the authoritative search solver. Run `npm run analyze:difficulty` to sample 100 puzzles per generation preset and print the confusion matrix, solved/stalled rate, technique distribution, and grading performance. Run `npm run audit:logic` for the 1000-puzzle safety audit with trace, mutation, determinism, and solution-candidate checks.
+The project now contains a pure TypeScript, human-oriented logical solver and transparent difficulty grader in `src/game/logic`. It records structured steps for Sudoku and Killer techniques, supports an honest `unrated` result when the implemented techniques stall, and never falls back to the authoritative search solver. Run `npm run analyze:difficulty` to sample generation presets vs grades. Run `npm run audit:logic` for the 1000-puzzle safety audit.
+
+## Phase 6 — calibrated generation
+
+`generateKillerPuzzle({ difficultyPreset })` now **accepts only** puzzles whose `gradeDifficulty` level matches the request (Easy→Easy, …). `unrated` and wrong grades are rejected; there is no silent fallback. Proposal profiles dig for hardness, then re-add givens deterministically until the target grade lands. Search uniqueness and the logical grader stay separate.
+
+```bash
+npm run analyze:calibrated-difficulty
+```
+
+Reports acceptance rate, attempts, timing, givens, and hardest-technique distribution for 100 accepted puzzles per level.
 
 The existing generator presets are not calibrated to the grader yet. Smart Hint UI is not implemented.

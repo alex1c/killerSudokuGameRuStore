@@ -38,9 +38,12 @@ describe('killer cages', () => {
 	})
 
 	it('is deterministic for the same solution + seed', () => {
+		// Seed pair chosen so default Phase 6 medium cage profile succeeds
+		// (some seeds cannot absorb undersized cages and throw by design).
 		const solution = generateSolvedBoard(9)
-		const a = generateKillerCages(solution, 1001)
-		const b = generateKillerCages(solution, 1001)
+		const a = generateKillerCages(solution, 555)
+		const b = generateKillerCages(solution, 555)
 		expect(a).toEqual(b)
+		expect(a.length).toBeGreaterThan(0)
 	})
 })

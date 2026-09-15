@@ -1,6 +1,8 @@
 /**
- * Difficulty foundation for Phase 4.
- * Presets change generation shape — they are NOT a proven human difficulty grader.
+ * Difficulty generation profiles for Phase 6.
+ *
+ * Presets shape cage layouts and dig depth so gradeDifficulty() can accept
+ * the requested human grade. Thresholds themselves are owned by the grader.
  */
 
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert'
@@ -21,8 +23,8 @@ export const DIFFICULTY_LABELS: Record<Difficulty, string> = {
 }
 
 /**
- * Cage-generation + dig knobs used by the puzzle generator.
- * These tune layout/givens — they do not claim human-rated difficulty.
+ * Cage-generation + dig knobs used by the calibrated puzzle generator.
+ * Profiles are tuned for yield into gradeDifficulty — not a second grader.
  */
 export interface CageGenerationPreset {
 	id: Difficulty
@@ -30,11 +32,16 @@ export interface CageGenerationPreset {
 	maxSize: number
 	/** Relative weights for sizes minSize..maxSize. */
 	sizeWeights: number[]
+	/**
+	 * Bounded proposal attempts (each attempt = cages + dig + grade calibrate).
+	 * Includes wrong-grade / unrated rejects.
+	 */
 	maxAttempts: number
 	allowSingletons: boolean
 	/**
-	 * Stop digging once this many empty cells are reached.
-	 * Higher = fewer givens (usually harder / slower dig).
+	 * Dig until this many empty cells (while uniqueness holds).
+	 * Deeper digs produce harder logical grades; givens may be re-added
+	 * afterward to land exactly on the requested grade.
 	 */
 	maxEmptyCells: number
 	/** Node budget for cage-only uniqueness probe. */
@@ -44,22 +51,24 @@ export interface CageGenerationPreset {
 }
 
 /**
- * Default medium profile — pair-biased cages, moderate dig depth.
+ * Default medium proposal profile — larger cages / deeper dig, then
+ * calibrate downward with givens until gradeDifficulty === medium.
  */
 export const DEFAULT_CAGE_PRESET: CageGenerationPreset = {
 	id: 'medium',
 	minSize: 2,
-	maxSize: 4,
-	sizeWeights: [70, 25, 5],
-	maxAttempts: 40,
+	maxSize: 5,
+	sizeWeights: [40, 35, 18, 7],
+	maxAttempts: 30,
 	allowSingletons: false,
-	maxEmptyCells: 62,
-	cageOnlyNodeLimit: 40_000,
-	digNodeLimit: 18_000,
+	maxEmptyCells: 70,
+	cageOnlyNodeLimit: 80_000,
+	digNodeLimit: 28_000,
 }
 
 /**
- * Named generation profiles. Not a human difficulty grader.
+ * Proposal profiles tuned so grade-filtered acceptance is frequent enough
+ * for mobile (see Phase 6 acceptance-rate targets).
  */
 export const CAGE_PRESETS: Record<Difficulty, CageGenerationPreset> = {
 	easy: {
@@ -67,34 +76,35 @@ export const CAGE_PRESETS: Record<Difficulty, CageGenerationPreset> = {
 		minSize: 2,
 		maxSize: 3,
 		sizeWeights: [75, 25],
-		maxAttempts: 35,
+		maxAttempts: 25,
 		allowSingletons: false,
-		maxEmptyCells: 48,
-		cageOnlyNodeLimit: 30_000,
-		digNodeLimit: 12_000,
+		// Dig far enough that some candidates overshoot; re-add givens to Easy.
+		maxEmptyCells: 55,
+		cageOnlyNodeLimit: 40_000,
+		digNodeLimit: 16_000,
 	},
 	medium: DEFAULT_CAGE_PRESET,
 	hard: {
 		id: 'hard',
 		minSize: 2,
 		maxSize: 5,
-		sizeWeights: [40, 35, 18, 7],
-		maxAttempts: 45,
+		sizeWeights: [25, 30, 30, 15],
+		maxAttempts: 40,
 		allowSingletons: false,
-		maxEmptyCells: 68,
-		cageOnlyNodeLimit: 50_000,
-		digNodeLimit: 22_000,
+		maxEmptyCells: 76,
+		cageOnlyNodeLimit: 100_000,
+		digNodeLimit: 35_000,
 	},
 	expert: {
 		id: 'expert',
 		minSize: 2,
 		maxSize: 5,
-		sizeWeights: [30, 35, 25, 10],
-		maxAttempts: 50,
+		sizeWeights: [25, 30, 30, 15],
+		maxAttempts: 40,
 		allowSingletons: false,
-		maxEmptyCells: 74,
-		cageOnlyNodeLimit: 60_000,
-		digNodeLimit: 25_000,
+		maxEmptyCells: 78,
+		cageOnlyNodeLimit: 100_000,
+		digNodeLimit: 35_000,
 	},
 }
 
