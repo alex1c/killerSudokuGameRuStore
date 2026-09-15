@@ -10,6 +10,7 @@ import {
 	type LogicalPuzzle,
 	type LogicalState,
 } from '../../../src/game/logic'
+import { maskToDigits } from '../../../src/game/logic'
 
 const emptyPuzzle: LogicalPuzzle = { board: Array(81).fill(0), cages: [] }
 const fullState = (): LogicalState => ({ values: Array(81).fill(0), candidates: Array(81).fill(FULL_CANDIDATE_MASK) })
@@ -60,6 +61,25 @@ describe('logical solver', () => {
 		expect(getCageCombinations(2, 3)).toEqual([[1, 2]])
 		expect(found?.technique).toBe('cage_combination')
 		expect(found?.eliminations.length).toBeGreaterThan(0)
+	})
+
+	it.each([[2, 3], [2, 10], [3, 17]] as const)('matches independent cage permutation oracle for size=%i sum=%i', (size, sum) => {
+		const cells = Array.from({ length: size }, (_, index) => index)
+		const puzzle: LogicalPuzzle = { board: Array(81).fill(0), cages: [{ id: 'oracle', sum, cells }] }
+		const state = initializeLogicalState(puzzle)
+		const expected = new Map<number, Set<number>>(cells.map((cell) => [cell, new Set<number>()]))
+		const combinations = getCageCombinations(size, sum)
+		for (const combination of combinations) {
+			const visit = (index: number, remaining: number[], selected: number[]): void => {
+				if (index === cells.length) {
+					for (let i = 0; i < cells.length; i += 1) expected.get(cells[i]!)!.add(selected[i]!)
+					return
+				}
+				for (const digit of remaining) visit(index + 1, remaining.filter((candidate) => candidate !== digit), [...selected, digit])
+			}
+			visit(0, combination, [])
+		}
+		for (const cell of cells) expect(maskToDigits(state.candidates[cell]!)).toEqual([...expected.get(cell)!].sort((a, b) => a - b))
 	})
 
 	it('finds a mathematically valid locked candidate', () => {
@@ -115,5 +135,11 @@ describe('logical solver', () => {
 		expect(puzzle.board).toEqual(before)
 		expect(first.solvedLogically).toBe(true)
 		expect(initializeLogicalState(puzzle).values).toEqual(before)
+	})
+
+	it('rejects invalid and duplicate step operations', () => {
+		const state = fullState()
+		expect(() => applyLogicalStep(state, { technique: 'naked_single', placements: [], eliminations: [{ cell: 81, digit: 1 }], relatedCells: [], explanationData: {}, difficultyWeight: 1 })).toThrow('Invalid elimination cell')
+		expect(() => applyLogicalStep(state, { technique: 'naked_single', placements: [], eliminations: [{ cell: 0, digit: 1 }, { cell: 0, digit: 1 }], relatedCells: [], explanationData: {}, difficultyWeight: 1 })).toThrow('absent candidate')
 	})
 })

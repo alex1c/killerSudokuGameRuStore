@@ -191,11 +191,16 @@ export function findNextLogicalStep(puzzle: LogicalPuzzle, state: LogicalState):
 export function applyLogicalStep(state: LogicalState, logicalStep: LogicalStep): LogicalState {
 	const next = cloneLogicalState(state)
 	for (const elimination of logicalStep.eliminations) {
+		if (!Number.isInteger(elimination.cell) || elimination.cell < 0 || elimination.cell >= 81) throw new Error('Invalid elimination cell')
+		if (elimination.digit < 1 || elimination.digit > 9) throw new Error('Invalid elimination digit')
 		if (next.values[elimination.cell] !== 0) throw new Error('Cannot eliminate a candidate from a filled cell')
+		if ((next.candidates[elimination.cell]! & digitMask(elimination.digit)) === 0) throw new Error('Cannot eliminate an absent candidate')
 		next.candidates[elimination.cell] = (next.candidates[elimination.cell]! & ~digitMask(elimination.digit))
 		if (next.candidates[elimination.cell] === 0) throw new Error(`Candidate set became empty at cell ${elimination.cell}`)
 	}
 	for (const placement of logicalStep.placements) {
+		if (!Number.isInteger(placement.cell) || placement.cell < 0 || placement.cell >= 81) throw new Error('Invalid placement cell')
+		if (placement.digit < 1 || placement.digit > 9) throw new Error('Invalid placement digit')
 		if (next.values[placement.cell] !== 0) throw new Error('Cannot place into a filled cell')
 		if ((next.candidates[placement.cell]! & digitMask(placement.digit)) === 0) throw new Error(`Placement is not a candidate: ${logicalStep.technique} cell=${placement.cell} digit=${placement.digit}`)
 		next.values[placement.cell] = placement.digit
@@ -205,6 +210,9 @@ export function applyLogicalStep(state: LogicalState, logicalStep: LogicalStep):
 		}
 	}
 	if (!isValidSudoku(next.values)) throw new Error('Logical step produced an invalid Sudoku state')
+	for (let cell = 0; cell < 81; cell += 1) {
+		if (next.values[cell] === 0 && next.candidates[cell] === 0) throw new Error(`Candidate set became empty at cell ${cell}`)
+	}
 	return next
 }
 
