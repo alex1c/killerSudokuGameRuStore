@@ -30,6 +30,7 @@ export const STORAGE_SCHEMA_VERSION = 1
 export {
 	SAVED_GAME_SCHEMA_VERSION,
 	ACTIVE_GAME_STORAGE_KEY,
+	PHASE4_QA_STORAGE_KEY,
 	serializeSavedGame,
 	parseSavedGame,
 	restoreGameFromSave,

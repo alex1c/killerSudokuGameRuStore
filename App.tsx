@@ -26,13 +26,15 @@ import { colors } from './src/theme'
 import { DifficultyScreen } from './src/ui/DifficultyScreen'
 import { GameScreen } from './src/ui/GameScreen'
 import { HomeScreen } from './src/ui/HomeScreen'
+import { Phase4QaScreen } from './src/dev/Phase4QaScreen'
 
 type Route =
 	| { name: 'boot' }
 	| { name: 'home' }
 	| { name: 'difficulty' }
-	| { name: 'loading'; difficulty: Difficulty; seed: number }
+	| { name: 'loading'; difficulty: Difficulty; seed: number; visibleStartedAt: number }
 	| { name: 'play'; state: GameState }
+	| { name: 'qa' }
 
 function AppRoot() {
 	const saveRepository = useMemo(
@@ -73,7 +75,8 @@ function AppRoot() {
 				loadTaskRef.current.cancel()
 			}
 			const epoch = ++loadEpochRef.current
-			setRoute({ name: 'loading', difficulty, seed })
+			const visibleStartedAt = Date.now()
+			setRoute({ name: 'loading', difficulty, seed, visibleStartedAt })
 
 			// Defer generation off the current interaction tick (no InteractionManager —
 			// it is deprecated and triggers a yellow-box warning in __DEV__).
@@ -89,6 +92,13 @@ function AppRoot() {
 						await saveRepository.savePlaying(state)
 						if (cancelled || epoch !== loadEpochRef.current) {
 							return
+						}
+						if (typeof __DEV__ !== 'undefined' && __DEV__) {
+							const userVisibleLoadingMs =
+								Date.now() - visibleStartedAt
+							console.log(
+								`[KILLER_UI] userVisibleLoadingMs=${userVisibleLoadingMs}`,
+							)
 						}
 						setRoute({ name: 'play', state })
 					} catch (error) {
@@ -154,7 +164,35 @@ function AppRoot() {
 					setRoute({ name: 'play', state })
 				}}
 				onNewGame={requestNewGame}
+				onOpenQa={
+					typeof __DEV__ !== 'undefined' && __DEV__
+						? () => setRoute({ name: 'qa' })
+						: undefined
+				}
 			/>
+		)
+	}
+
+	if (route.name === 'qa') {
+		if (typeof __DEV__ === 'undefined' || !__DEV__) {
+			return (
+				<HomeScreen
+					savedGame={savedGame}
+					onContinue={() => {
+						if (!savedGame) {
+							return
+						}
+						setRoute({
+							name: 'play',
+							state: restoreGameFromSave(savedGame),
+						})
+					}}
+					onNewGame={requestNewGame}
+				/>
+			)
+		}
+		return (
+			<Phase4QaScreen onBack={() => setRoute({ name: 'home' })} />
 		)
 	}
 

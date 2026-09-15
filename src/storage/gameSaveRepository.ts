@@ -14,25 +14,31 @@ import type { GameState } from '../gameplay'
 
 /**
  * Latest-wins write queue so an older async write cannot clobber a newer save.
+ * Optional `storageKey` lets QA use a separate namespace without touching user saves.
  */
 export class GameSaveRepository {
 	private readonly adapter: StorageAdapter
+	private readonly storageKey: string
 	private writeChain: Promise<void> = Promise.resolve()
 	private writeEpoch = 0
 
-	constructor(adapter: StorageAdapter) {
+	constructor(
+		adapter: StorageAdapter,
+		storageKey: string = ACTIVE_GAME_STORAGE_KEY,
+	) {
 		this.adapter = adapter
+		this.storageKey = storageKey
 	}
 
 	async load(): Promise<LoadSavedGameResult> {
 		try {
-			const raw = await this.adapter.getItem(ACTIVE_GAME_STORAGE_KEY)
+			const raw = await this.adapter.getItem(this.storageKey)
 			const parsed = parseSavedGame(raw)
 			if (!parsed.ok && raw !== null) {
 				if (typeof __DEV__ !== 'undefined' && __DEV__) {
 					console.warn('[save] corrupt/ignored:', parsed.reason)
 				}
-				await this.adapter.removeItem(ACTIVE_GAME_STORAGE_KEY)
+				await this.adapter.removeItem(this.storageKey)
 			}
 			return parsed
 		} catch (error) {
@@ -59,7 +65,13 @@ export class GameSaveRepository {
 				if (epoch !== this.writeEpoch) {
 					return
 				}
-				await this.adapter.setItem(ACTIVE_GAME_STORAGE_KEY, payload)
+				try {
+					await this.adapter.setItem(this.storageKey, payload)
+				} catch (error) {
+					if (typeof __DEV__ !== 'undefined' && __DEV__) {
+						console.warn('[save] write failed', error)
+					}
+				}
 			})
 		return this.writeChain
 	}
@@ -72,7 +84,13 @@ export class GameSaveRepository {
 				if (epoch !== this.writeEpoch) {
 					return
 				}
-				await this.adapter.removeItem(ACTIVE_GAME_STORAGE_KEY)
+				try {
+					await this.adapter.removeItem(this.storageKey)
+				} catch (error) {
+					if (typeof __DEV__ !== 'undefined' && __DEV__) {
+						console.warn('[save] clear failed', error)
+					}
+				}
 			})
 		return this.writeChain
 	}

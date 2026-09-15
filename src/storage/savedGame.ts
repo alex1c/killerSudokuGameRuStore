@@ -14,6 +14,8 @@ import type { GameState } from '../gameplay'
 
 export const SAVED_GAME_SCHEMA_VERSION = 1 as const
 export const ACTIVE_GAME_STORAGE_KEY = 'killerSudoku.activeGame.v1'
+/** Dev-only Phase 4 QA namespace — never use for user Continue saves. */
+export const PHASE4_QA_STORAGE_KEY = 'killerSudoku.dev.phase4qa'
 
 export interface SerializedKillerPuzzleV1 {
 	seed: number

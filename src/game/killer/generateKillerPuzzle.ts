@@ -132,6 +132,17 @@ function minimizeGivens(
 	return board
 }
 
+/** Monotonic clock for generation instrumentation (dev + profiling). */
+function monotonicMs(): number {
+	if (
+		typeof performance !== 'undefined' &&
+		typeof performance.now === 'function'
+	) {
+		return performance.now()
+	}
+	return Date.now()
+}
+
 /**
  * Generate a validated unique Killer puzzle for the given seed.
  */
@@ -142,6 +153,7 @@ export function generateKillerPuzzle(
 	const preset =
 		options.preset ?? getCagePreset(options.difficultyPreset)
 	const maxAttempts = options.maxAttempts ?? preset.maxAttempts
+	const startedMs = monotonicMs()
 
 	let lastError = 'unknown failure'
 
@@ -189,7 +201,7 @@ export function generateKillerPuzzle(
 				continue
 			}
 
-			return {
+			const puzzle: KillerPuzzle = {
 				seed: baseSeed,
 				attempt,
 				difficultyPreset: preset.id,
@@ -197,6 +209,16 @@ export function generateKillerPuzzle(
 				solution,
 				cages,
 			}
+
+			// Development-only: actual engine generation time (not UI loading).
+			if (typeof __DEV__ !== 'undefined' && __DEV__) {
+				const generationMs = monotonicMs() - startedMs
+				console.log(
+					`[KILLER_GEN] difficulty=${preset.id} seed=${baseSeed} generationMs=${generationMs.toFixed(1)}`,
+				)
+			}
+
+			return puzzle
 		} catch (error) {
 			lastError =
 				error instanceof Error ? error.message : String(error)

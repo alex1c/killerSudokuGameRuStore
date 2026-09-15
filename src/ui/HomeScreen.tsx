@@ -20,10 +20,12 @@ export interface HomeScreenProps {
 	savedGame: SavedGameV1 | null
 	onContinue: () => void
 	onNewGame: () => void
+	/** Development-only Phase 4 QA entry (omit in production). */
+	onOpenQa?: () => void
 }
 
 export function HomeScreen(props: HomeScreenProps) {
-	const { savedGame, onContinue, onNewGame } = props
+	const { savedGame, onContinue, onNewGame, onOpenQa } = props
 	const insets = useSafeAreaInsets()
 
 	const continueMeta = savedGame
@@ -76,6 +78,20 @@ export function HomeScreen(props: HomeScreenProps) {
 						Новая игра
 					</Text>
 				</Pressable>
+
+				{typeof __DEV__ !== 'undefined' && __DEV__ && onOpenQa ? (
+					<Pressable
+						onPress={onOpenQa}
+						accessibilityRole="button"
+						accessibilityLabel="Phase 4 QA"
+						style={({ pressed }) => [
+							styles.qaButton,
+							pressed ? styles.pressed : null,
+						]}
+					>
+						<Text style={styles.qaText}>QA</Text>
+					</Pressable>
+				) : null}
 			</View>
 		</View>
 	)
@@ -143,6 +159,17 @@ const styles = StyleSheet.create({
 		color: colors.primaryText,
 		fontSize: 18,
 		fontWeight: '700',
+	},
+	qaButton: {
+		alignSelf: 'center',
+		marginTop: 8,
+		paddingVertical: 8,
+		paddingHorizontal: 16,
+	},
+	qaText: {
+		color: colors.secondaryText,
+		fontSize: 14,
+		fontWeight: '600',
 	},
 	pressed: {
 		opacity: 0.88,
