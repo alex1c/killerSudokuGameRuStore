@@ -95,6 +95,33 @@ export class GameSaveRepository {
 		return this.writeChain
 	}
 
+	/**
+	 * Persist a SavedGameV1 document directly (backup restore).
+	 * Pass null to clear the active-game slot.
+	 */
+	saveDocument(save: SavedGameV1 | null): Promise<void> {
+		if (save === null) {
+			return this.clear()
+		}
+		const payload = JSON.stringify(save)
+		const epoch = ++this.writeEpoch
+		this.writeChain = this.writeChain
+			.catch(() => undefined)
+			.then(async () => {
+				if (epoch !== this.writeEpoch) {
+					return
+				}
+				try {
+					await this.adapter.setItem(this.storageKey, payload)
+				} catch (error) {
+					if (typeof __DEV__ !== 'undefined' && __DEV__) {
+						console.warn('[save] document write failed', error)
+					}
+				}
+			})
+		return this.writeChain
+	}
+
 	/** Test helper: wait until queued writes settle. */
 	async flush(): Promise<void> {
 		await this.writeChain.catch(() => undefined)

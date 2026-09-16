@@ -1,5 +1,5 @@
 /**
- * App shell: Home, Daily, Learning, Stats, Settings, New Game, Continue.
+ * App shell: Home, Daily, Learning, Stats, Settings, Onboarding, About, New Game.
  * Product block wiring — no sync generation on Home open.
  */
 
@@ -28,8 +28,16 @@ import {
 	type GenerationCancelToken,
 } from './src/game/killer/cooperative'
 import {
+	applyBackupAtomic,
+	buildBackup,
+	exportBackupToShare,
+	pickBackupJsonFile,
+} from './src/backup'
+import { trackAnalytics } from './src/analytics'
+import {
 	createEmptyDailyProgress,
 	createEmptyLearningProgress,
+	createEmptyOnboarding,
 	createEmptyStats,
 	DailyProgressRepository,
 	DEFAULT_SETTINGS,
@@ -39,6 +47,8 @@ import {
 	markDailyCompleted,
 	markLessonInteractiveComplete,
 	markLessonViewed,
+	markOnboardingCompleted,
+	OnboardingRepository,
 	recordGameCompleted,
 	recordGameStarted,
 	restoreGameFromSave,
@@ -47,6 +57,7 @@ import {
 	uniqueKey,
 	type DailyProgressV1,
 	type LearningProgressV1,
+	type OnboardingV1,
 	type SavedGameV1,
 	type SettingsV1,
 	type StatsV1,
@@ -62,6 +73,8 @@ import { DailyScreen } from './src/ui/DailyScreen'
 import { LearningScreen } from './src/ui/LearningScreen'
 import { StatsScreen } from './src/ui/StatsScreen'
 import { SettingsScreen } from './src/ui/SettingsScreen'
+import { OnboardingScreen } from './src/ui/OnboardingScreen'
+import { AboutScreen } from './src/ui/AboutScreen'
 import { Phase4QaScreen } from './src/dev/Phase4QaScreen'
 
 type PlayMeta =
@@ -75,12 +88,14 @@ type PlayMeta =
 
 type Route =
 	| { name: 'boot' }
+	| { name: 'onboarding'; manual: boolean }
 	| { name: 'home' }
 	| { name: 'difficulty' }
 	| { name: 'daily' }
 	| { name: 'learning' }
 	| { name: 'stats' }
 	| { name: 'settings' }
+	| { name: 'about' }
 	| {
 			name: 'loading'
 			difficulty: Difficulty
@@ -113,6 +128,10 @@ function AppRoot() {
 		() => new LearningProgressRepository(asyncStorageAdapter),
 		[],
 	)
+	const onboardingRepository = useMemo(
+		() => new OnboardingRepository(asyncStorageAdapter),
+		[],
+	)
 	const poolController = useMemo(
 		() => getSharedPuzzlePoolController(asyncStorageAdapter),
 		[],
@@ -127,6 +146,9 @@ function AppRoot() {
 	)
 	const [learningProgress, setLearningProgress] =
 		useState<LearningProgressV1>(createEmptyLearningProgress())
+	const [onboarding, setOnboarding] = useState<OnboardingV1>(
+		createEmptyOnboarding(),
+	)
 	const loadTaskRef = useRef<{ cancel: () => void } | null>(null)
 	const loadEpochRef = useRef(0)
 	const genCancelRef = useRef<GenerationCancelToken | null>(null)
@@ -135,14 +157,21 @@ function AppRoot() {
 	useEffect(() => {
 		let cancelled = false
 		void (async () => {
-			const [loaded, nextSettings, nextStats, nextDaily, nextLearning] =
-				await Promise.all([
-					saveRepository.load(),
-					settingsRepository.load(),
-					statsRepository.load(),
-					dailyRepository.load(),
-					learningRepository.load(),
-				])
+			const [
+				loaded,
+				nextSettings,
+				nextStats,
+				nextDaily,
+				nextLearning,
+				nextOnboarding,
+			] = await Promise.all([
+				saveRepository.load(),
+				settingsRepository.load(),
+				statsRepository.load(),
+				dailyRepository.load(),
+				learningRepository.load(),
+				onboardingRepository.load(),
+			])
 			if (cancelled) {
 				return
 			}
@@ -151,7 +180,12 @@ function AppRoot() {
 			setStats(nextStats)
 			setDailyProgress(nextDaily)
 			setLearningProgress(nextLearning)
-			setRoute({ name: 'home' })
+			setOnboarding(nextOnboarding)
+			if (!nextOnboarding.completed) {
+				setRoute({ name: 'onboarding', manual: false })
+			} else {
+				setRoute({ name: 'home' })
+			}
 		})()
 		return () => {
 			cancelled = true
@@ -167,6 +201,7 @@ function AppRoot() {
 		statsRepository,
 		dailyRepository,
 		learningRepository,
+		onboardingRepository,
 		poolController,
 	])
 
@@ -213,6 +248,136 @@ function AppRoot() {
 		setStats(await statsRepository.load())
 	}, [statsRepository])
 
+	const reloadAllUserData = useCallback(async () => {
+		const [
+			loaded,
+			nextSettings,
+			nextStats,
+			nextDaily,
+			nextLearning,
+			nextOnboarding,
+		] = await Promise.all([
+			saveRepository.load(),
+			settingsRepository.load(),
+			statsRepository.load(),
+			dailyRepository.load(),
+			learningRepository.load(),
+			onboardingRepository.load(),
+		])
+		setSavedGame(loaded.ok ? loaded.save : null)
+		setSettings(nextSettings)
+		setStats(nextStats)
+		setDailyProgress(nextDaily)
+		setLearningProgress(nextLearning)
+		setOnboarding(nextOnboarding)
+	}, [
+		saveRepository,
+		settingsRepository,
+		statsRepository,
+		dailyRepository,
+		learningRepository,
+		onboardingRepository,
+	])
+
+	const handleExportBackup = useCallback(() => {
+		void (async () => {
+			const backup = buildBackup({
+				settings,
+				stats,
+				daily: dailyProgress,
+				learning: learningProgress,
+				activeGame: savedGame,
+				onboarding,
+			})
+			const result = await exportBackupToShare(backup)
+			if (result.ok) {
+				trackAnalytics('backup_created')
+				Alert.alert('Готово', 'Резервная копия создана.')
+			} else {
+				Alert.alert(
+					'Не удалось создать копию',
+					result.reason || 'Неизвестная ошибка',
+				)
+			}
+		})()
+	}, [
+		settings,
+		stats,
+		dailyProgress,
+		learningProgress,
+		savedGame,
+		onboarding,
+	])
+
+	const handleImportBackup = useCallback(() => {
+		void (async () => {
+			const picked = await pickBackupJsonFile()
+			if (!picked.ok) {
+				if (!picked.cancelled) {
+					Alert.alert(
+						'Не удалось открыть файл',
+						picked.reason || 'Неизвестная ошибка',
+					)
+				}
+				return
+			}
+			Alert.alert(
+				'Восстановить данные?',
+				'Текущие данные приложения будут заменены данными из резервной копии.',
+				[
+					{ text: 'Отмена', style: 'cancel' },
+					{
+						text: 'Восстановить',
+						style: 'destructive',
+						onPress: () => {
+							void (async () => {
+								const result = await applyBackupAtomic(
+									picked.raw,
+									{
+										saveSettings: (next) =>
+											settingsRepository.save(next),
+										saveStats: (next) =>
+											statsRepository.save(next),
+										saveDaily: (next) =>
+											dailyRepository.save(next),
+										saveLearning: (next) =>
+											learningRepository.save(next),
+										saveActiveGame: (next) =>
+											saveRepository.saveDocument(next),
+										saveOnboarding: (next) =>
+											onboardingRepository.save(next),
+									},
+								)
+								if (!result.ok) {
+									Alert.alert(
+										'Копия не принята',
+										'Файл повреждён или имеет неверный формат. Текущие данные не изменены.',
+									)
+									return
+								}
+								trackAnalytics('backup_restored')
+								await reloadAllUserData()
+								Alert.alert(
+									'Восстановлено',
+									'Данные успешно восстановлены.',
+								)
+								setRoute({ name: 'home' })
+							})()
+						},
+					},
+				],
+			)
+		})()
+	}, [
+		settingsRepository,
+		statsRepository,
+		dailyRepository,
+		learningRepository,
+		saveRepository,
+		onboardingRepository,
+		reloadAllUserData,
+	])
+
 	const startPlay = useCallback(
 		(meta: PlayMeta) => {
 			if (loadTaskRef.current !== null) {
@@ -235,6 +400,10 @@ function AppRoot() {
 			})
 			poolController.setGameplayActive(true)
 			poolController.pauseFill()
+			trackAnalytics(
+				meta.kind === 'daily' ? 'daily_started' : 'game_started',
+				{ difficulty },
+			)
 
 			let cancelled = false
 			const cancelToken = createGenerationCancelToken()
@@ -352,6 +521,26 @@ function AppRoot() {
 		return <LoadingView message="Загрузка…" />
 	}
 
+	if (route.name === 'onboarding') {
+		return (
+			<OnboardingScreen
+				manualReview={route.manual}
+				onClose={() => setRoute({ name: 'settings' })}
+				onComplete={() => {
+					void onboardingRepository
+						.update((current) =>
+							markOnboardingCompleted(current),
+						)
+						.then((next) => {
+							setOnboarding(next)
+							trackAnalytics('onboarding_completed')
+							setRoute({ name: 'home' })
+						})
+				}}
+			/>
+		)
+	}
+
 	if (route.name === 'home') {
 		return (
 			<HomeScreen
@@ -430,7 +619,10 @@ function AppRoot() {
 						.update((current) =>
 							markLessonInteractiveComplete(current, lessonId),
 						)
-						.then(setLearningProgress)
+						.then((next) => {
+							setLearningProgress(next)
+							trackAnalytics('lesson_completed', { lessonId })
+						})
 				}}
 			/>
 		)
@@ -445,6 +637,12 @@ function AppRoot() {
 		)
 	}
 
+	if (route.name === 'about') {
+		return (
+			<AboutScreen onBack={() => setRoute({ name: 'settings' })} />
+		)
+	}
+
 	if (route.name === 'settings') {
 		return (
 			<SettingsScreen
@@ -455,6 +653,13 @@ function AppRoot() {
 						.update((current) => ({ ...current, ...partial }))
 						.then(setSettings)
 				}}
+				onExportBackup={handleExportBackup}
+				onImportBackup={handleImportBackup}
+				onOpenOnboarding={() =>
+					setRoute({ name: 'onboarding', manual: true })
+				}
+				onOpenLearning={() => setRoute({ name: 'learning' })}
+				onOpenAbout={() => setRoute({ name: 'about' })}
 			/>
 		)
 	}
@@ -482,6 +687,7 @@ function AppRoot() {
 			<DifficultyScreen
 				onBack={() => setRoute({ name: 'home' })}
 				onSelect={(difficulty) => {
+					trackAnalytics('difficulty_selected', { difficulty })
 					const seed =
 						(Date.now() ^
 							Math.floor(Math.random() * 0xffffffff)) >>>
@@ -571,6 +777,12 @@ function AppRoot() {
 						},
 					)
 					setStats(nextStats)
+					trackAnalytics(
+						playMeta.kind === 'daily'
+							? 'daily_completed'
+							: 'game_completed',
+						{ difficulty },
+					)
 					if (playMeta.kind === 'daily') {
 						const nextDaily = await dailyRepository.update(
 							(current) =>
@@ -612,10 +824,16 @@ function LoadingView(props: {
 			<ActivityIndicator size="large" color={colors.playerText} />
 			<Text style={styles.loadingText}>{props.message}</Text>
 			{props.onCancel ? (
-				<Pressable onPress={props.onCancel} accessibilityRole="button">
-					<Text style={styles.cancel}>Отмена</Text>
+				<Pressable
+					onPress={props.onCancel}
+					accessibilityRole="button"
+					accessibilityLabel="Отмена"
+					style={styles.cancelButton}
+				>
+					<Text style={styles.cancelText}>Отмена</Text>
 				</Pressable>
 			) : null}
+			<StatusBar style="dark" />
 		</View>
 	)
 }
@@ -623,8 +841,8 @@ function LoadingView(props: {
 export default function App() {
 	return (
 		<SafeAreaProvider>
-			<StatusBar style="dark" />
 			<AppRoot />
+			<StatusBar style="dark" />
 		</SafeAreaProvider>
 	)
 }
@@ -636,16 +854,22 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		gap: 16,
+		paddingHorizontal: 24,
 	},
 	loadingText: {
-		fontSize: 18,
-		fontWeight: '600',
-		color: colors.primaryText,
-	},
-	cancel: {
-		marginTop: 24,
-		color: colors.secondaryText,
 		fontSize: 16,
 		fontWeight: '600',
+		color: colors.primaryText,
+		textAlign: 'center',
+	},
+	cancelButton: {
+		marginTop: 8,
+		paddingVertical: 10,
+		paddingHorizontal: 18,
+	},
+	cancelText: {
+		fontSize: 15,
+		fontWeight: '600',
+		color: colors.secondaryText,
 	},
 })

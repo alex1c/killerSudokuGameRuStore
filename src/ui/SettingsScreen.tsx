@@ -1,6 +1,5 @@
 /**
- * Settings screen — toggles + error-checking segmented control for SettingsV1.
- * Sound/haptic persist but may be no-ops until platform hooks land.
+ * Settings — game toggles, backup, help, about.
  */
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
@@ -12,6 +11,11 @@ export interface SettingsScreenProps {
 	settings: SettingsV1
 	onChange: (partial: Partial<Omit<SettingsV1, 'schemaVersion'>>) => void
 	onBack: () => void
+	onExportBackup?: () => void
+	onImportBackup?: () => void
+	onOpenOnboarding?: () => void
+	onOpenLearning?: () => void
+	onOpenAbout?: () => void
 }
 
 const ERROR_CHECKING_OPTIONS: readonly {
@@ -24,7 +28,16 @@ const ERROR_CHECKING_OPTIONS: readonly {
 ]
 
 export function SettingsScreen(props: SettingsScreenProps) {
-	const { settings, onChange, onBack } = props
+	const {
+		settings,
+		onChange,
+		onBack,
+		onExportBackup,
+		onImportBackup,
+		onOpenOnboarding,
+		onOpenLearning,
+		onOpenAbout,
+	} = props
 	const insets = useSafeAreaInsets()
 
 	return (
@@ -53,11 +66,13 @@ export function SettingsScreen(props: SettingsScreenProps) {
 			>
 				<Text style={styles.title}>Настройки</Text>
 
+				<Text style={styles.sectionLabel}>Игра</Text>
+
 				<View style={styles.card}>
 					<Text style={styles.groupTitle}>Проверка ошибок</Text>
 					<Text style={styles.groupHint}>
-						Сравнение с решением. Конфликты правил Судоку и областей
-						видны всегда.
+						Режим «Сразу» сравнивает цифры с решением. Конфликты
+						правил Судоку и областей видны всегда.
 					</Text>
 					<View style={styles.segmentRow}>
 						{ERROR_CHECKING_OPTIONS.map((option) => {
@@ -71,7 +86,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
 									}
 									accessibilityRole="button"
 									accessibilityState={{ selected }}
-									accessibilityLabel={option.label}
+									accessibilityLabel={`Проверка ошибок: ${option.label}`}
 									style={({ pressed }) => [
 										styles.segment,
 										selected ? styles.segmentSelected : null,
@@ -104,7 +119,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
 					}
 				/>
 				<ToggleRow
-					label="Подсветка строки / столбца / блока"
+					label="Подсветка строки и столбца"
 					value={settings.highlightRelated}
 					onToggle={() =>
 						onChange({
@@ -130,7 +145,7 @@ export function SettingsScreen(props: SettingsScreenProps) {
 				/>
 				<ToggleRow
 					label="Звук"
-					subtitle="Сохраняется; может быть без эффекта до подключения платформы."
+					subtitle="Короткие звуки ввода; в этой сборке воспроизведение ещё не подключено."
 					value={settings.soundEnabled}
 					onToggle={() =>
 						onChange({ soundEnabled: !settings.soundEnabled })
@@ -138,12 +153,62 @@ export function SettingsScreen(props: SettingsScreenProps) {
 				/>
 				<ToggleRow
 					label="Вибрация"
-					subtitle="Сохраняется; может быть без эффекта до подключения платформы."
 					value={settings.hapticEnabled}
 					onToggle={() =>
 						onChange({ hapticEnabled: !settings.hapticEnabled })
 					}
 				/>
+
+				{(onExportBackup || onImportBackup) && (
+					<>
+						<Text style={styles.sectionLabel}>Данные</Text>
+						{onExportBackup ? (
+							<ActionRow
+								label="Создать резервную копию"
+								accessibilityLabel="Создать резервную копию"
+								onPress={onExportBackup}
+							/>
+						) : null}
+						{onImportBackup ? (
+							<ActionRow
+								label="Восстановить из копии"
+								accessibilityLabel="Восстановить из копии"
+								onPress={onImportBackup}
+							/>
+						) : null}
+					</>
+				)}
+
+				{(onOpenOnboarding || onOpenLearning) && (
+					<>
+						<Text style={styles.sectionLabel}>Помощь</Text>
+						{onOpenOnboarding ? (
+							<ActionRow
+								label="Вводное обучение"
+								accessibilityLabel="Посмотреть вводное обучение"
+								onPress={onOpenOnboarding}
+							/>
+						) : null}
+						{onOpenLearning ? (
+							<ActionRow
+								label="Обучение"
+								accessibilityLabel="Обучение"
+								onPress={onOpenLearning}
+							/>
+						) : null}
+					</>
+				)}
+
+				{onOpenAbout ? (
+					<>
+						<Text style={styles.sectionLabel}>О приложении</Text>
+						<ActionRow
+							label="О приложении"
+							accessibilityLabel="О приложении"
+							onPress={onOpenAbout}
+						/>
+					</>
+				) : null}
 			</ScrollView>
 		</View>
 	)
@@ -190,6 +255,28 @@ function ToggleRow(props: {
 	)
 }
 
+function ActionRow(props: {
+	label: string
+	accessibilityLabel: string
+	onPress: () => void
+}) {
+	const { label, accessibilityLabel, onPress } = props
+	return (
+		<Pressable
+			onPress={onPress}
+			accessibilityRole="button"
+			accessibilityLabel={accessibilityLabel}
+			style={({ pressed }) => [
+				styles.toggleCard,
+				pressed ? styles.pressed : null,
+			]}
+		>
+			<Text style={styles.toggleLabel}>{label}</Text>
+			<Text style={styles.chevron}>›</Text>
+		</Pressable>
+	)
+}
+
 const styles = StyleSheet.create({
 	screen: {
 		flex: 1,
@@ -214,6 +301,14 @@ const styles = StyleSheet.create({
 		fontWeight: '700',
 		color: colors.primaryText,
 		marginBottom: 4,
+	},
+	sectionLabel: {
+		marginTop: 8,
+		fontSize: 13,
+		fontWeight: '700',
+		letterSpacing: 0.4,
+		textTransform: 'uppercase',
+		color: colors.secondaryText,
 	},
 	card: {
 		backgroundColor: colors.boardBackground,
@@ -279,6 +374,7 @@ const styles = StyleSheet.create({
 		gap: 4,
 	},
 	toggleLabel: {
+		flex: 1,
 		fontSize: 16,
 		fontWeight: '700',
 		color: colors.primaryText,
@@ -287,6 +383,11 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		lineHeight: 16,
 		color: colors.secondaryText,
+	},
+	chevron: {
+		fontSize: 22,
+		color: colors.secondaryText,
+		fontWeight: '400',
 	},
 	switchTrack: {
 		width: 48,

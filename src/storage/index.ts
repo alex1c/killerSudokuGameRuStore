@@ -113,6 +113,8 @@ export {
 	parseDailyProgress,
 	serializeDailyProgress,
 	localDateString,
+	compareLocalDateStrings,
+	isFutureLocalDate,
 	dailySeed,
 	markDailyCompleted,
 	isDayCompleted,
@@ -141,3 +143,17 @@ export type {
 	LoadLearningProgressResult,
 } from './learningProgress'
 export { LearningProgressRepository } from './learningProgressRepository'
+
+export {
+	ONBOARDING_SCHEMA_VERSION,
+	ONBOARDING_STORAGE_KEY,
+	createEmptyOnboarding,
+	parseOnboarding,
+	serializeOnboarding,
+	markOnboardingCompleted,
+} from './onboarding'
+export type {
+	OnboardingV1,
+	LoadOnboardingResult,
+} from './onboarding'
+export { OnboardingRepository } from './onboardingRepository'
