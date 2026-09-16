@@ -8,6 +8,7 @@ import {
 	ActivityIndicator,
 	Alert,
 	AppState,
+	BackHandler,
 	type AppStateStatus,
 	Pressable,
 	StyleSheet,
@@ -248,6 +249,45 @@ function AppRoot() {
 		const loaded = await saveRepository.load()
 		setSavedGame(loaded.ok ? loaded.save : null)
 	}, [saveRepository])
+
+	useEffect(() => {
+		const subscription = BackHandler.addEventListener(
+			'hardwareBackPress',
+			() => {
+				switch (route.name) {
+					case 'home':
+						return false
+					case 'onboarding':
+						if (route.manual) {
+							setRoute({ name: 'settings' })
+							return true
+						}
+						return false
+					case 'difficulty':
+					case 'daily':
+					case 'learning':
+					case 'stats':
+					case 'settings':
+					case 'qa':
+						setRoute({ name: 'home' })
+						return true
+					case 'about':
+						setRoute({ name: 'settings' })
+						return true
+					case 'play':
+						void refreshSavedCard().then(() =>
+							setRoute({ name: 'home' }),
+						)
+						return true
+					case 'loading':
+						return false
+					case 'boot':
+						return false
+				}
+			},
+		)
+		return () => subscription.remove()
+	}, [refreshSavedCard, route])
 
 	const refreshDaily = useCallback(async () => {
 		setDailyProgress(await dailyRepository.load())

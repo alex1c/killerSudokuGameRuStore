@@ -13,6 +13,7 @@ import {
 import {
 	Alert,
 	AppState,
+	BackHandler,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -88,6 +89,22 @@ export function GameScreen(props: GameScreenProps) {
 	const [hintView, setHintView] = useState<FormattedHint | null>(null)
 	/** on_complete: highlight solution mismatches after a full-board check. */
 	const [revealMismatches, setRevealMismatches] = useState(false)
+
+	useEffect(() => {
+		const subscription = BackHandler.addEventListener(
+			'hardwareBackPress',
+			() => {
+				if (hintView) {
+					setHintSession(null)
+					setHintView(null)
+					return true
+				}
+				onExitToHome()
+				return true
+			},
+		)
+		return () => subscription.remove()
+	}, [hintView, onExitToHome])
 	const stateRef = useRef(state)
 	const meaningfulRef = useRef(false)
 	const completedNotified = useRef(false)
