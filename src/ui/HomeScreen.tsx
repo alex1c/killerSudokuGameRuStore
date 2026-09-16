@@ -20,12 +20,25 @@ export interface HomeScreenProps {
 	savedGame: SavedGameV1 | null
 	onContinue: () => void
 	onNewGame: () => void
+	onOpenDaily?: () => void
+	onOpenLearning?: () => void
+	onOpenStats?: () => void
+	onOpenSettings?: () => void
 	/** Development-only Phase 4 QA entry (omit in production). */
 	onOpenQa?: () => void
 }
 
 export function HomeScreen(props: HomeScreenProps) {
-	const { savedGame, onContinue, onNewGame, onOpenQa } = props
+	const {
+		savedGame,
+		onContinue,
+		onNewGame,
+		onOpenDaily,
+		onOpenLearning,
+		onOpenStats,
+		onOpenSettings,
+		onOpenQa,
+	} = props
 	const insets = useSafeAreaInsets()
 
 	const continueMeta = savedGame
@@ -78,6 +91,62 @@ export function HomeScreen(props: HomeScreenProps) {
 						Новая игра
 					</Text>
 				</Pressable>
+
+				{onOpenDaily ? (
+					<Pressable
+						onPress={onOpenDaily}
+						accessibilityRole="button"
+						accessibilityLabel="Задача дня"
+						style={({ pressed }) => [
+							styles.secondaryButton,
+							pressed ? styles.pressed : null,
+						]}
+					>
+						<Text style={styles.secondaryText}>Задача дня</Text>
+					</Pressable>
+				) : null}
+
+				<View style={styles.linkGroup}>
+					{onOpenLearning ? (
+						<Pressable
+							onPress={onOpenLearning}
+							accessibilityRole="button"
+							accessibilityLabel="Обучение"
+							style={({ pressed }) => [
+								styles.linkButton,
+								pressed ? styles.pressed : null,
+							]}
+						>
+							<Text style={styles.linkText}>Обучение</Text>
+						</Pressable>
+					) : null}
+					{onOpenStats ? (
+						<Pressable
+							onPress={onOpenStats}
+							accessibilityRole="button"
+							accessibilityLabel="Статистика"
+							style={({ pressed }) => [
+								styles.linkButton,
+								pressed ? styles.pressed : null,
+							]}
+						>
+							<Text style={styles.linkText}>Статистика</Text>
+						</Pressable>
+					) : null}
+					{onOpenSettings ? (
+						<Pressable
+							onPress={onOpenSettings}
+							accessibilityRole="button"
+							accessibilityLabel="Настройки"
+							style={({ pressed }) => [
+								styles.linkButton,
+								pressed ? styles.pressed : null,
+							]}
+						>
+							<Text style={styles.linkText}>Настройки</Text>
+						</Pressable>
+					) : null}
+				</View>
 
 				{typeof __DEV__ !== 'undefined' && __DEV__ && onOpenQa ? (
 					<Pressable
@@ -159,6 +228,20 @@ const styles = StyleSheet.create({
 		color: colors.primaryText,
 		fontSize: 18,
 		fontWeight: '700',
+	},
+	linkGroup: {
+		marginTop: 8,
+		gap: 4,
+		alignItems: 'center',
+	},
+	linkButton: {
+		paddingVertical: 10,
+		paddingHorizontal: 16,
+	},
+	linkText: {
+		color: colors.secondaryText,
+		fontSize: 16,
+		fontWeight: '600',
 	},
 	qaButton: {
 		alignSelf: 'center',

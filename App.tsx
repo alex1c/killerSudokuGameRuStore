@@ -1,6 +1,6 @@
 /**
- * App shell: Home → Difficulty → Loading → Game, with Continue restore.
- * Phase 6Q: Hard/Expert prefer prepared pool; background fill only on Home.
+ * App shell: Home, Daily, Learning, Stats, Settings, New Game, Continue.
+ * Product block wiring — no sync generation on Home open.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -28,30 +28,68 @@ import {
 	type GenerationCancelToken,
 } from './src/game/killer/cooperative'
 import {
+	createEmptyDailyProgress,
+	createEmptyLearningProgress,
+	createEmptyStats,
+	DailyProgressRepository,
+	DEFAULT_SETTINGS,
 	GameSaveRepository,
+	LearningProgressRepository,
+	localDateString,
+	markDailyCompleted,
+	markLessonInteractiveComplete,
+	markLessonViewed,
+	recordGameCompleted,
+	recordGameStarted,
 	restoreGameFromSave,
+	SettingsRepository,
+	StatsRepository,
+	uniqueKey,
+	type DailyProgressV1,
+	type LearningProgressV1,
 	type SavedGameV1,
+	type SettingsV1,
+	type StatsV1,
 } from './src/storage'
 import { asyncStorageAdapter } from './src/storage/asyncStorageAdapter'
 import { getSharedPuzzlePoolController } from './src/pool/puzzlePoolController'
+import { createOrLoadDailyPuzzle } from './src/daily'
 import { colors } from './src/theme'
 import { DifficultyScreen } from './src/ui/DifficultyScreen'
 import { GameScreen } from './src/ui/GameScreen'
 import { HomeScreen } from './src/ui/HomeScreen'
+import { DailyScreen } from './src/ui/DailyScreen'
+import { LearningScreen } from './src/ui/LearningScreen'
+import { StatsScreen } from './src/ui/StatsScreen'
+import { SettingsScreen } from './src/ui/SettingsScreen'
 import { Phase4QaScreen } from './src/dev/Phase4QaScreen'
+
+type PlayMeta =
+	| { kind: 'normal'; difficulty: Difficulty; seed: number }
+	| {
+			kind: 'daily'
+			difficulty: Difficulty
+			seed: number
+			dateStr: string
+	  }
 
 type Route =
 	| { name: 'boot' }
 	| { name: 'home' }
 	| { name: 'difficulty' }
+	| { name: 'daily' }
+	| { name: 'learning' }
+	| { name: 'stats' }
+	| { name: 'settings' }
 	| {
 			name: 'loading'
 			difficulty: Difficulty
 			seed: number
 			visibleStartedAt: number
 			fromPool: boolean
+			meta: PlayMeta
 	  }
-	| { name: 'play'; state: GameState }
+	| { name: 'play'; state: GameState; meta: PlayMeta }
 	| { name: 'qa' }
 
 function AppRoot() {
@@ -59,24 +97,60 @@ function AppRoot() {
 		() => new GameSaveRepository(asyncStorageAdapter),
 		[],
 	)
+	const settingsRepository = useMemo(
+		() => new SettingsRepository(asyncStorageAdapter),
+		[],
+	)
+	const statsRepository = useMemo(
+		() => new StatsRepository(asyncStorageAdapter),
+		[],
+	)
+	const dailyRepository = useMemo(
+		() => new DailyProgressRepository(asyncStorageAdapter),
+		[],
+	)
+	const learningRepository = useMemo(
+		() => new LearningProgressRepository(asyncStorageAdapter),
+		[],
+	)
 	const poolController = useMemo(
 		() => getSharedPuzzlePoolController(asyncStorageAdapter),
 		[],
 	)
+
 	const [route, setRoute] = useState<Route>({ name: 'boot' })
 	const [savedGame, setSavedGame] = useState<SavedGameV1 | null>(null)
+	const [settings, setSettings] = useState<SettingsV1>(DEFAULT_SETTINGS)
+	const [stats, setStats] = useState<StatsV1>(createEmptyStats())
+	const [dailyProgress, setDailyProgress] = useState<DailyProgressV1>(
+		createEmptyDailyProgress(),
+	)
+	const [learningProgress, setLearningProgress] =
+		useState<LearningProgressV1>(createEmptyLearningProgress())
 	const loadTaskRef = useRef<{ cancel: () => void } | null>(null)
 	const loadEpochRef = useRef(0)
 	const genCancelRef = useRef<GenerationCancelToken | null>(null)
+	const startedKeysRef = useRef(new Set<string>())
 
 	useEffect(() => {
 		let cancelled = false
 		void (async () => {
-			const loaded = await saveRepository.load()
+			const [loaded, nextSettings, nextStats, nextDaily, nextLearning] =
+				await Promise.all([
+					saveRepository.load(),
+					settingsRepository.load(),
+					statsRepository.load(),
+					dailyRepository.load(),
+					learningRepository.load(),
+				])
 			if (cancelled) {
 				return
 			}
 			setSavedGame(loaded.ok ? loaded.save : null)
+			setSettings(nextSettings)
+			setStats(nextStats)
+			setDailyProgress(nextDaily)
+			setLearningProgress(nextLearning)
 			setRoute({ name: 'home' })
 		})()
 		return () => {
@@ -87,9 +161,15 @@ function AppRoot() {
 			genCancelRef.current?.cancel()
 			poolController.pauseFill()
 		}
-	}, [saveRepository, poolController])
+	}, [
+		saveRepository,
+		settingsRepository,
+		statsRepository,
+		dailyRepository,
+		learningRepository,
+		poolController,
+	])
 
-	// Home idle → warm Hard/Expert pool (deferred until UI is interactive).
 	useEffect(() => {
 		if (route.name !== 'home') {
 			poolController.setHomeVisible(false)
@@ -125,21 +205,33 @@ function AppRoot() {
 		setSavedGame(loaded.ok ? loaded.save : null)
 	}, [saveRepository])
 
-	const startGeneration = useCallback(
-		(difficulty: Difficulty, seed: number) => {
+	const refreshDaily = useCallback(async () => {
+		setDailyProgress(await dailyRepository.load())
+	}, [dailyRepository])
+
+	const refreshStats = useCallback(async () => {
+		setStats(await statsRepository.load())
+	}, [statsRepository])
+
+	const startPlay = useCallback(
+		(meta: PlayMeta) => {
 			if (loadTaskRef.current !== null) {
 				loadTaskRef.current.cancel()
 			}
 			genCancelRef.current?.cancel()
 			const epoch = ++loadEpochRef.current
 			const visibleStartedAt = Date.now()
-			const usePool = difficulty === 'hard' || difficulty === 'expert'
+			const { difficulty, seed } = meta
+			const usePool =
+				meta.kind === 'normal' &&
+				(difficulty === 'hard' || difficulty === 'expert')
 			setRoute({
 				name: 'loading',
 				difficulty,
 				seed,
 				visibleStartedAt,
 				fromPool: usePool,
+				meta,
 			})
 			poolController.setGameplayActive(true)
 			poolController.pauseFill()
@@ -155,7 +247,15 @@ function AppRoot() {
 						let fromPool = false
 						let retrievalMs = 0
 
-						if (usePool) {
+						if (meta.kind === 'daily') {
+							const puzzle = await createOrLoadDailyPuzzle(
+								meta.dateStr,
+								difficulty,
+								dailyRepository,
+							)
+							state = createGameFromPuzzle(puzzle)
+							setDailyProgress(await dailyRepository.load())
+						} else if (usePool) {
 							const prepared = await poolController.consume(
 								difficulty,
 							)
@@ -168,7 +268,6 @@ function AppRoot() {
 								fromPool = true
 								retrievalMs = prepared.retrievalMs
 							} else {
-								// Empty pool fallback — cooperative generate.
 								state = await createGameAsync({
 									seed,
 									difficulty,
@@ -177,7 +276,6 @@ function AppRoot() {
 								})
 							}
 						} else {
-							// Easy/Medium stay fast sync on-demand.
 							state = createGame({ seed, difficulty })
 						}
 
@@ -189,13 +287,11 @@ function AppRoot() {
 							return
 						}
 						if (typeof __DEV__ !== 'undefined' && __DEV__) {
-							const userVisibleLoadingMs =
-								Date.now() - visibleStartedAt
 							console.log(
-								`[KILLER_UI] userVisibleLoadingMs=${userVisibleLoadingMs} fromPool=${fromPool} retrievalMs=${retrievalMs.toFixed(1)} difficulty=${difficulty}`,
+								`[KILLER_UI] userVisibleLoadingMs=${Date.now() - visibleStartedAt} fromPool=${fromPool} retrievalMs=${retrievalMs.toFixed(1)} difficulty=${difficulty} kind=${meta.kind}`,
 							)
 						}
-						setRoute({ name: 'play', state })
+						setRoute({ name: 'play', state, meta })
 					} catch (error) {
 						if (cancelled || epoch !== loadEpochRef.current) {
 							return
@@ -226,7 +322,12 @@ function AppRoot() {
 				},
 			}
 		},
-		[poolController, refreshSavedCard, saveRepository],
+		[
+			dailyRepository,
+			poolController,
+			refreshSavedCard,
+			saveRepository,
+		],
 	)
 
 	const requestNewGame = useCallback(() => {
@@ -245,6 +346,8 @@ function AppRoot() {
 		go()
 	}, [savedGame])
 
+	const todayStr = localDateString(new Date())
+
 	if (route.name === 'boot') {
 		return <LoadingView message="Загрузка…" />
 	}
@@ -260,9 +363,25 @@ function AppRoot() {
 					poolController.setGameplayActive(true)
 					poolController.pauseFill()
 					const state = restoreGameFromSave(savedGame)
-					setRoute({ name: 'play', state })
+					setRoute({
+						name: 'play',
+						state,
+						meta: {
+							kind: 'normal',
+							difficulty: savedGame.difficulty,
+							seed: savedGame.seed,
+						},
+					})
 				}}
 				onNewGame={requestNewGame}
+				onOpenDaily={() => setRoute({ name: 'daily' })}
+				onOpenLearning={() => setRoute({ name: 'learning' })}
+				onOpenStats={() => {
+					void refreshStats().then(() =>
+						setRoute({ name: 'stats' }),
+					)
+				}}
+				onOpenSettings={() => setRoute({ name: 'settings' })}
 				onOpenQa={
 					typeof __DEV__ !== 'undefined' && __DEV__
 						? () => setRoute({ name: 'qa' })
@@ -272,20 +391,80 @@ function AppRoot() {
 		)
 	}
 
+	if (route.name === 'daily') {
+		return (
+			<DailyScreen
+				progress={dailyProgress}
+				todayStr={todayStr}
+				onBack={() => setRoute({ name: 'home' })}
+				onRefreshProgress={() => {
+					void refreshDaily()
+				}}
+				onPlay={(difficulty) => {
+					const seed = 0 // resolved inside createOrLoadDailyPuzzle
+					startPlay({
+						kind: 'daily',
+						difficulty,
+						seed,
+						dateStr: todayStr,
+					})
+				}}
+			/>
+		)
+	}
+
+	if (route.name === 'learning') {
+		return (
+			<LearningScreen
+				progress={learningProgress}
+				onBack={() => setRoute({ name: 'home' })}
+				onViewLesson={(lessonId) => {
+					void learningRepository
+						.update((current) =>
+							markLessonViewed(current, lessonId),
+						)
+						.then(setLearningProgress)
+				}}
+				onCompleteInteractive={(lessonId) => {
+					void learningRepository
+						.update((current) =>
+							markLessonInteractiveComplete(current, lessonId),
+						)
+						.then(setLearningProgress)
+				}}
+			/>
+		)
+	}
+
+	if (route.name === 'stats') {
+		return (
+			<StatsScreen
+				stats={stats}
+				onBack={() => setRoute({ name: 'home' })}
+			/>
+		)
+	}
+
+	if (route.name === 'settings') {
+		return (
+			<SettingsScreen
+				settings={settings}
+				onBack={() => setRoute({ name: 'home' })}
+				onChange={(partial) => {
+					void settingsRepository
+						.update((current) => ({ ...current, ...partial }))
+						.then(setSettings)
+				}}
+			/>
+		)
+	}
+
 	if (route.name === 'qa') {
 		if (typeof __DEV__ === 'undefined' || !__DEV__) {
 			return (
 				<HomeScreen
 					savedGame={savedGame}
-					onContinue={() => {
-						if (!savedGame) {
-							return
-						}
-						setRoute({
-							name: 'play',
-							state: restoreGameFromSave(savedGame),
-						})
-					}}
+					onContinue={() => undefined}
 					onNewGame={requestNewGame}
 				/>
 			)
@@ -307,7 +486,7 @@ function AppRoot() {
 						(Date.now() ^
 							Math.floor(Math.random() * 0xffffffff)) >>>
 						0
-					startGeneration(difficulty, seed)
+					startPlay({ kind: 'normal', difficulty, seed })
 				}}
 			/>
 		)
@@ -329,24 +508,87 @@ function AppRoot() {
 					}
 					genCancelRef.current?.cancel()
 					void refreshSavedCard().then(() =>
-						setRoute({ name: 'home' }),
+						setRoute(
+							route.meta.kind === 'daily'
+								? { name: 'daily' }
+								: { name: 'home' },
+						),
 					)
 				}}
 			/>
 		)
 	}
 
+	const playMeta = route.meta
 	return (
 		<GameScreen
 			initialState={route.state}
 			saveRepository={saveRepository}
+			settings={settings}
 			onExitToHome={() => {
 				void refreshSavedCard().then(() => setRoute({ name: 'home' }))
 			}}
 			onNewGameFromCompletion={() => {
 				void saveRepository.clear()
 				setSavedGame(null)
-				setRoute({ name: 'difficulty' })
+				if (playMeta.kind === 'daily') {
+					setRoute({ name: 'daily' })
+				} else {
+					setRoute({ name: 'difficulty' })
+				}
+			}}
+			onMeaningfulAction={() => {
+				const key = uniqueKey(
+					playMeta.difficulty,
+					route.state.puzzle.seed,
+				)
+				if (startedKeysRef.current.has(key)) {
+					return
+				}
+				startedKeysRef.current.add(key)
+				void statsRepository
+					.update((current) =>
+						recordGameStarted(current, playMeta.difficulty),
+					)
+					.then(setStats)
+			}}
+			onCompleted={(elapsedMs) => {
+				const seed = route.state.puzzle.seed
+				const difficulty = playMeta.difficulty
+				const key = uniqueKey(difficulty, seed)
+				void (async () => {
+					const nextStats = await statsRepository.update(
+						(current) => {
+							const already = current.uniqueSolvedSeeds.includes(
+								key,
+							)
+							return recordGameCompleted(current, {
+								difficulty,
+								seed,
+								elapsedMs,
+								isReplayUnique: !already,
+							})
+						},
+					)
+					setStats(nextStats)
+					if (playMeta.kind === 'daily') {
+						const nextDaily = await dailyRepository.update(
+							(current) =>
+								markDailyCompleted(
+									current,
+									playMeta.dateStr,
+									difficulty,
+								),
+						)
+						setDailyProgress(nextDaily)
+						await statsRepository.update((current) => ({
+							...current,
+							currentDailyStreak: nextDaily.currentStreak,
+							bestDailyStreak: nextDaily.bestStreak,
+						}))
+						setStats(await statsRepository.load())
+					}
+				})()
 			}}
 		/>
 	)

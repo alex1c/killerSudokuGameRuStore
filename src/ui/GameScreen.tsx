@@ -1,5 +1,6 @@
 /**
  * Playable game screen — receives an already-created GameState from the app shell.
+ * Smart Hint uses LogicalStep only (no solution leak).
  */
 
 import {
@@ -30,6 +31,15 @@ import {
 	type GameState,
 } from '../gameplay'
 import type { GameSaveRepository } from '../storage'
+import type { SettingsV1 } from '../settings'
+import {
+	advanceHintSession,
+	createHintSession,
+	placementFromHint,
+	presentHint,
+	type FormattedHint,
+	type HintSession,
+} from '../hints'
 import { colors, spacing, typography } from '../theme'
 import { computeBoardSize } from './boardLayout'
 import { CompletionOverlay } from './CompletionOverlay'
@@ -40,8 +50,13 @@ import { NumberKeypad } from './NumberKeypad'
 export interface GameScreenProps {
 	initialState: GameState
 	saveRepository: GameSaveRepository
+	settings: SettingsV1
 	onExitToHome: () => void
 	onNewGameFromCompletion: () => void
+	/** First meaningful player action (digit/erase) — for stats.started. */
+	onMeaningfulAction?: () => void
+	/** Fired once when the puzzle completes. */
+	onCompleted?: (elapsedMs: number) => void
 }
 
 const TIMER_AUTOSAVE_MS = 30_000
@@ -50,20 +65,36 @@ export function GameScreen(props: GameScreenProps) {
 	const {
 		initialState,
 		saveRepository,
+		settings,
 		onExitToHome,
 		onNewGameFromCompletion,
+		onMeaningfulAction,
+		onCompleted,
 	} = props
 	const insets = useSafeAreaInsets()
 	const { width } = useWindowDimensions()
 	const boardSize = useMemo(() => computeBoardSize(width), [width])
 	const [state, setState] = useState<GameState>(initialState)
 	const [now, setNow] = useState(() => Date.now())
+	const [hintSession, setHintSession] = useState<HintSession | null>(null)
+	const [hintView, setHintView] = useState<FormattedHint | null>(null)
 	const stateRef = useRef(state)
+	const meaningfulRef = useRef(false)
+	const completedNotified = useRef(false)
 
 	useEffect(() => {
-		// Keep a latest snapshot for interval autosave without reading refs in render.
 		stateRef.current = state
 	}, [state])
+
+	useEffect(() => {
+		if (
+			state.status === 'completed' &&
+			!completedNotified.current
+		) {
+			completedNotified.current = true
+			onCompleted?.(state.timerAccumulatedMs)
+		}
+	}, [state.status, state.timerAccumulatedMs, onCompleted])
 
 	const persist = useCallback(
 		(next: GameState, stamp: number = Date.now()) => {
@@ -76,10 +107,22 @@ export function GameScreen(props: GameScreenProps) {
 		[saveRepository],
 	)
 
+	const gameplayOptions = useMemo(
+		() => ({ autoClearNotes: settings.autoClearNotes }),
+		[settings.autoClearNotes],
+	)
+
 	const dispatch = useCallback(
 		(action: GameAction): void => {
+			if (
+				!meaningfulRef.current &&
+				(action.type === 'INPUT_DIGIT' || action.type === 'ERASE')
+			) {
+				meaningfulRef.current = true
+				onMeaningfulAction?.()
+			}
 			setState((current) => {
-				const next = gameReducer(current, action)
+				const next = gameReducer(current, action, gameplayOptions)
 				const shouldPersist =
 					action.type === 'INPUT_DIGIT' ||
 					action.type === 'ERASE' ||
@@ -93,8 +136,18 @@ export function GameScreen(props: GameScreenProps) {
 				}
 				return next
 			})
+			// Board changed — dismiss active hint to avoid stale highlights.
+			if (
+				action.type === 'INPUT_DIGIT' ||
+				action.type === 'ERASE' ||
+				action.type === 'UNDO' ||
+				action.type === 'REPLAY'
+			) {
+				setHintSession(null)
+				setHintView(null)
+			}
 		},
-		[persist],
+		[gameplayOptions, onMeaningfulAction, persist],
 	)
 
 	useEffect(() => {
@@ -161,6 +214,51 @@ export function GameScreen(props: GameScreenProps) {
 
 	const gameplayLocked = state.status === 'completed'
 
+	const hintHighlightCells = useMemo(() => {
+		if (!hintView) {
+			return undefined
+		}
+		return new Set(hintView.highlightCells)
+	}, [hintView])
+
+	const hintTargetCells = useMemo(() => {
+		if (!hintView) {
+			return undefined
+		}
+		return new Set(hintView.targetCells)
+	}, [hintView])
+
+	const handleHintPress = () => {
+		if (gameplayLocked) {
+			return
+		}
+		if (hintSession === null) {
+			const session = createHintSession(state)
+			setHintSession(session)
+			setHintView(presentHint(session))
+			return
+		}
+		const next = advanceHintSession(hintSession)
+		setHintSession(next)
+		setHintView(presentHint(next))
+	}
+
+	const handleApplyHint = () => {
+		if (!hintSession?.step) {
+			return
+		}
+		const placement = placementFromHint(hintSession.step)
+		if (!placement) {
+			setHintSession(null)
+			setHintView(null)
+			return
+		}
+		dispatch({ type: 'SELECT_CELL', cell: placement.cell })
+		dispatch({ type: 'INPUT_DIGIT', digit: placement.digit })
+		setHintSession(null)
+		setHintView(null)
+	}
+
 	return (
 		<View
 			style={[
@@ -188,7 +286,7 @@ export function GameScreen(props: GameScreenProps) {
 					style={styles.timer}
 					accessibilityLabel={`Время ${elapsedLabel}`}
 				>
-					{elapsedLabel}
+					{settings.showTimer ? elapsedLabel : ' '}
 				</Text>
 			</View>
 
@@ -196,6 +294,13 @@ export function GameScreen(props: GameScreenProps) {
 				<KillerBoard
 					state={state}
 					boardSize={boardSize}
+					highlightRelated={settings.highlightRelated}
+					highlightSameNumbers={settings.highlightSameNumbers}
+					checkAgainstSolution={
+						settings.errorChecking === 'immediate'
+					}
+					hintHighlightCells={hintHighlightCells}
+					hintTargetCells={hintTargetCells}
 					onSelectCell={(cell) => {
 						if (!gameplayLocked) {
 							dispatch({ type: 'SELECT_CELL', cell })
@@ -204,7 +309,41 @@ export function GameScreen(props: GameScreenProps) {
 				/>
 			</View>
 
-			{typeof __DEV__ !== 'undefined' && __DEV__ ? (
+			{hintView ? (
+				<View style={styles.hintCard}>
+					<Text style={styles.hintTitle}>{hintView.title}</Text>
+					<Text style={styles.hintBody}>{hintView.body}</Text>
+					<View style={styles.hintActions}>
+						{hintView.canAdvance ? (
+							<Pressable
+								onPress={handleHintPress}
+								accessibilityRole="button"
+							>
+								<Text style={styles.hintAction}>Далее</Text>
+							</Pressable>
+						) : null}
+						{hintView.canApply ? (
+							<Pressable
+								onPress={handleApplyHint}
+								accessibilityRole="button"
+							>
+								<Text style={styles.hintAction}>
+									Показать ход
+								</Text>
+							</Pressable>
+						) : null}
+						<Pressable
+							onPress={() => {
+								setHintSession(null)
+								setHintView(null)
+							}}
+							accessibilityRole="button"
+						>
+							<Text style={styles.hintDismiss}>Закрыть</Text>
+						</Pressable>
+					</View>
+				</View>
+			) : typeof __DEV__ !== 'undefined' && __DEV__ ? (
 				<Pressable
 					onPress={() => dispatch({ type: 'DEV_FILL_SOLUTION' })}
 					accessibilityRole="button"
@@ -221,9 +360,11 @@ export function GameScreen(props: GameScreenProps) {
 				notesMode={state.notesMode}
 				canUndo={state.history.length > 0}
 				disabled={gameplayLocked}
+				hintActive={hintSession !== null}
 				onUndo={() => dispatch({ type: 'UNDO' })}
 				onToggleNotes={() => dispatch({ type: 'TOGGLE_NOTES_MODE' })}
 				onErase={() => dispatch({ type: 'ERASE' })}
+				onHint={handleHintPress}
 			/>
 
 			<NumberKeypad
@@ -239,6 +380,7 @@ export function GameScreen(props: GameScreenProps) {
 				elapsedLabel={formatElapsed(state.timerAccumulatedMs)}
 				onNewGame={onNewGameFromCompletion}
 				onReplay={() => {
+					completedNotified.current = false
 					dispatch({ type: 'REPLAY' })
 					dispatch({ type: 'TIMER_RESUME', now: Date.now() })
 				}}
@@ -291,6 +433,40 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		flexGrow: 1,
+	},
+	hintCard: {
+		marginHorizontal: spacing.screenPadding,
+		marginBottom: 6,
+		padding: 10,
+		borderRadius: 10,
+		borderWidth: 1,
+		borderColor: colors.keypadBorder,
+		backgroundColor: colors.boardBackground,
+	},
+	hintTitle: {
+		fontWeight: '700',
+		color: colors.primaryText,
+		marginBottom: 4,
+	},
+	hintBody: {
+		color: colors.secondaryText,
+		fontSize: 13,
+		lineHeight: 18,
+	},
+	hintActions: {
+		flexDirection: 'row',
+		gap: 16,
+		marginTop: 8,
+	},
+	hintAction: {
+		color: colors.playerText,
+		fontWeight: '700',
+		fontSize: 14,
+	},
+	hintDismiss: {
+		color: colors.secondaryText,
+		fontWeight: '600',
+		fontSize: 14,
 	},
 	devButton: {
 		alignSelf: 'center',

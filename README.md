@@ -186,7 +186,14 @@ Hermes was spending most of Hard/Expert time on an empty-board cage-only uniquen
 
 Dev screen: **Run Generator Perf QA** (Easy×3 / Medium×3 / Hard×5 / Expert×5, Metro excluded).
 
-## Phase 6Q — prepared puzzle pool
+## Product block — Hint / Learning / Daily / Stats / Settings
+
+Home actions: Continue, New Game, Daily Challenge, Learning, Statistics, Settings.
+
+- **Smart Hint** uses `findNextLogicalStep` (no solution leak); 4-level progressive UI.
+- **Learning**: 8 lessons, first 5 interactive; progress in `killerSudoku.learning.v1`.
+- **Daily**: deterministic local-date seeds, per-difficulty completion, calendar + streak in `killerSudoku.daily.v1`.
+- **Stats / Settings**: `killerSudoku.stats.v1`, `killerSudoku.settings.v1`.
 
 Hard/Expert puzzles can be pre-generated into a local pool (`killerSudoku.puzzlePool.v1`) while the user is on Home. New Game Hard/Expert consumes a prepared item when available (near-instant); otherwise falls back to cooperative calibrated generation with a loading message. Easy/Medium stay on-demand. Pool refill pauses during gameplay and when the app is backgrounded. Generator version invalidates old pool items.
 
