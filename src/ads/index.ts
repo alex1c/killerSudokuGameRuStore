@@ -1,57 +1,31 @@
 /**
- * Ads placement policy & hooks — no production SDK / IDs in this build.
+ * Ads domain barrel — config, limiter, banner, interstitial, rewarded.
  */
 
-export type AdPlacement =
-	| 'home_banner'
-	| 'stats_banner'
-	| 'learning_banner'
-	| 'post_completion_interstitial'
-	| 'optional_rewarded_hint'
+export {
+	YANDEX_AD_UNITS,
+	BANNER_UNIT_BY_PLACEMENT,
+	APP_OPEN_AD,
+	ADS_POLICY,
+	bannerUnitId,
+	isGameScreenBannerAllowed,
+} from './config'
+export type { BannerPlacement, AdsPolicy } from './config'
 
-export interface AdsPolicy {
-	/** Never show interstitial during active solving. */
-	interstitialDuringPlay: false
-	/** Preferred interstitial point. */
-	interstitialPlacement: 'post_completion_interstitial'
-	/** Minimum gap between interstitials (ms). */
-	minInterstitialGapMs: number
-	/** Soft cap per app session for v1. */
-	maxInterstitialsPerSession: number
-	/** Banners must not shrink the GameScreen board. */
-	bannerOnGameScreen: false
-	allowedBannerPlacements: readonly AdPlacement[]
-}
+export {
+	InterstitialLimiter,
+	getInterstitialLimiter,
+	__resetInterstitialLimiterForTests,
+} from './limiter'
+export type {
+	InterstitialDecision,
+	InterstitialDecisionContext,
+	InterstitialDenyReason,
+	InterstitialLimiterState,
+} from './limiter'
 
-export const ADS_POLICY: AdsPolicy = {
-	interstitialDuringPlay: false,
-	interstitialPlacement: 'post_completion_interstitial',
-	minInterstitialGapMs: 5 * 60 * 1000,
-	maxInterstitialsPerSession: 1,
-	bannerOnGameScreen: false,
-	allowedBannerPlacements: [
-		'home_banner',
-		'stats_banner',
-		'learning_banner',
-	],
-}
-
-export interface AdsClient {
-	showBanner?(placement: AdPlacement): void
-	hideBanner?(placement: AdPlacement): void
-	showInterstitial?(placement: AdPlacement): Promise<boolean>
-	showRewarded?(placement: AdPlacement): Promise<boolean>
-}
-
-/** No-op until real RuStore/Yandex Ads IDs are provided. */
-export const noopAds: AdsClient = {}
-
-let activeAds: AdsClient = noopAds
-
-export function setAdsClient(client: AdsClient): void {
-	activeAds = client
-}
-
-export function getAdsClient(): AdsClient {
-	return activeAds
-}
+export { initializeYandexAds, isYandexAdsInitialized } from './sdk'
+export { AdBanner } from './banner'
+export { maybeShowCompletionInterstitial } from './interstitial'
+export type { ShowInterstitialResult } from './interstitial'
+export { getRewardedConfig, preloadRewardedAd } from './rewarded'

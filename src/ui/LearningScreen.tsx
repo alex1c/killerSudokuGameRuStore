@@ -12,6 +12,7 @@ import {
 	View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AdBanner } from '../ads'
 import {
 	LESSONS,
 	getLessonById,
@@ -152,6 +153,9 @@ function LessonList(props: {
 						</Pressable>
 					)
 				})}
+				<View style={styles.bannerSlot}>
+					<AdBanner placement="learning" />
+				</View>
 			</ScrollView>
 		</>
 	)
@@ -265,6 +269,10 @@ const styles = StyleSheet.create({
 	list: {
 		gap: 12,
 		paddingBottom: 24,
+	},
+	bannerSlot: {
+		marginTop: 8,
+		minHeight: 0,
 	},
 	item: {
 		backgroundColor: colors.boardBackground,

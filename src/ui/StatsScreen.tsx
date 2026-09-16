@@ -4,6 +4,7 @@
 
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AdBanner } from '../ads'
 import {
 	DIFFICULTY_LABELS,
 	PLAYABLE_DIFFICULTIES,
@@ -76,6 +77,10 @@ export function StatsScreen(props: StatsScreenProps) {
 						row={stats.byDifficulty[difficulty]}
 					/>
 				))}
+
+				<View style={styles.bannerSlot}>
+					<AdBanner placement="stats" />
+				</View>
 			</ScrollView>
 		</View>
 	)
@@ -184,5 +189,9 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 		fontWeight: '700',
 		color: colors.primaryText,
+	},
+	bannerSlot: {
+		marginTop: 8,
+		minHeight: 0,
 	},
 })

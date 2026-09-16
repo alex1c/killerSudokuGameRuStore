@@ -34,6 +34,8 @@ import {
 	pickBackupJsonFile,
 } from './src/backup'
 import { trackAnalytics } from './src/analytics'
+import { initializeAppMetrica } from './src/analytics/appmetrica'
+import { initializeYandexAds, maybeShowCompletionInterstitial } from './src/ads'
 import {
 	createEmptyDailyProgress,
 	createEmptyLearningProgress,
@@ -187,6 +189,13 @@ function AppRoot() {
 				setRoute({ name: 'home' })
 			}
 		})()
+		// Fire-and-forget monetization SDKs — never block Home.
+		try {
+			initializeAppMetrica()
+		} catch {
+			// Ignore.
+		}
+		void initializeYandexAds()
 		return () => {
 			cancelled = true
 			if (loadTaskRef.current !== null) {
@@ -402,7 +411,10 @@ function AppRoot() {
 			poolController.pauseFill()
 			trackAnalytics(
 				meta.kind === 'daily' ? 'daily_started' : 'game_started',
-				{ difficulty },
+				{
+					difficulty,
+					source: meta.kind === 'daily' ? 'daily' : 'new_game',
+				},
 			)
 
 			let cancelled = false
@@ -500,6 +512,7 @@ function AppRoot() {
 	)
 
 	const requestNewGame = useCallback(() => {
+		trackAnalytics('new_game_requested')
 		const go = () => setRoute({ name: 'difficulty' })
 		if (savedGame) {
 			Alert.alert(
@@ -549,6 +562,13 @@ function AppRoot() {
 					if (!savedGame) {
 						return
 					}
+					trackAnalytics('continue_game', {
+						difficulty: savedGame.difficulty,
+					})
+					trackAnalytics('game_started', {
+						difficulty: savedGame.difficulty,
+						source: 'continue',
+					})
 					poolController.setGameplayActive(true)
 					poolController.pauseFill()
 					const state = restoreGameFromSave(savedGame)
@@ -758,10 +778,11 @@ function AppRoot() {
 					)
 					.then(setStats)
 			}}
-			onCompleted={(elapsedMs) => {
+			onCompleted={(info) => {
 				const seed = route.state.puzzle.seed
 				const difficulty = playMeta.difficulty
 				const key = uniqueKey(difficulty, seed)
+				const isDaily = playMeta.kind === 'daily'
 				void (async () => {
 					const nextStats = await statsRepository.update(
 						(current) => {
@@ -771,19 +792,22 @@ function AppRoot() {
 							return recordGameCompleted(current, {
 								difficulty,
 								seed,
-								elapsedMs,
+								elapsedMs: info.elapsedMs,
 								isReplayUnique: !already,
 							})
 						},
 					)
 					setStats(nextStats)
 					trackAnalytics(
-						playMeta.kind === 'daily'
-							? 'daily_completed'
-							: 'game_completed',
-						{ difficulty },
+						isDaily ? 'daily_completed' : 'game_completed',
+						{
+							difficulty,
+							elapsed_seconds: Math.round(info.elapsedMs / 1000),
+							daily: isDaily,
+							hints_used: info.hintsUsed,
+						},
 					)
-					if (playMeta.kind === 'daily') {
+					if (isDaily) {
 						const nextDaily = await dailyRepository.update(
 							(current) =>
 								markDailyCompleted(
@@ -799,6 +823,11 @@ function AppRoot() {
 							bestDailyStreak: nextDaily.bestStreak,
 						}))
 						setStats(await statsRepository.load())
+					} else {
+						// Interstitial only after normal completion bookkeeping.
+						void maybeShowCompletionInterstitial({
+							isDaily: false,
+						})
 					}
 				})()
 			}}

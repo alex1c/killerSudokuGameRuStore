@@ -2,8 +2,10 @@
  * Home screen — Continue / New Game. Never generates a puzzle on open.
  */
 
+import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { AdBanner } from '../ads'
 import {
 	DIFFICULTY_LABELS,
 	type Difficulty,
@@ -26,6 +28,8 @@ export interface HomeScreenProps {
 	onOpenSettings?: () => void
 	/** Development-only Phase 4 QA entry (omit in production). */
 	onOpenQa?: () => void
+	/** Optional override for tests (defaults to Home AdBanner). */
+	banner?: ReactNode
 }
 
 export function HomeScreen(props: HomeScreenProps) {
@@ -38,12 +42,15 @@ export function HomeScreen(props: HomeScreenProps) {
 		onOpenStats,
 		onOpenSettings,
 		onOpenQa,
+		banner,
 	} = props
 	const insets = useSafeAreaInsets()
 
 	const continueMeta = savedGame
 		? buildContinueMeta(savedGame)
 		: null
+	const bannerNode =
+		banner === undefined ? <AdBanner placement="home" /> : banner
 
 	return (
 		<View
@@ -51,7 +58,7 @@ export function HomeScreen(props: HomeScreenProps) {
 				styles.screen,
 				{
 					paddingTop: insets.top + 24,
-					paddingBottom: insets.bottom + 24,
+					paddingBottom: insets.bottom + 8,
 				},
 			]}
 		>
@@ -162,6 +169,8 @@ export function HomeScreen(props: HomeScreenProps) {
 					</Pressable>
 				) : null}
 			</View>
+
+			<View style={styles.bannerSlot}>{bannerNode}</View>
 		</View>
 	)
 }
@@ -196,6 +205,7 @@ const styles = StyleSheet.create({
 		marginBottom: 48,
 	},
 	actions: {
+		flex: 1,
 		gap: 14,
 	},
 	primaryButton: {
@@ -253,6 +263,10 @@ const styles = StyleSheet.create({
 		color: colors.secondaryText,
 		fontSize: 14,
 		fontWeight: '600',
+	},
+	bannerSlot: {
+		marginTop: 8,
+		minHeight: 0,
 	},
 	pressed: {
 		opacity: 0.88,

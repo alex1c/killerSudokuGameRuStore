@@ -36,6 +36,7 @@ import {
 import type { GameSaveRepository } from '../storage'
 import type { SettingsV1 } from '../settings'
 import { playHaptic, playSound } from '../feedback'
+import { trackAnalytics } from '../analytics'
 import {
 	advanceHintSession,
 	createHintSession,
@@ -60,7 +61,10 @@ export interface GameScreenProps {
 	/** First meaningful player action (digit/erase) — for stats.started. */
 	onMeaningfulAction?: () => void
 	/** Fired once when the puzzle completes. */
-	onCompleted?: (elapsedMs: number) => void
+	onCompleted?: (info: {
+		elapsedMs: number
+		hintsUsed: number
+	}) => void
 }
 
 const TIMER_AUTOSAVE_MS = 30_000
@@ -88,6 +92,7 @@ export function GameScreen(props: GameScreenProps) {
 	const meaningfulRef = useRef(false)
 	const completedNotified = useRef(false)
 	const onCompleteWarned = useRef(false)
+	const hintsUsedRef = useRef(0)
 
 	useEffect(() => {
 		stateRef.current = state
@@ -101,7 +106,10 @@ export function GameScreen(props: GameScreenProps) {
 			completedNotified.current = true
 			void playHaptic(settings.hapticEnabled, 'success')
 			void playSound(settings.soundEnabled, 'completion')
-			onCompleted?.(state.timerAccumulatedMs)
+			onCompleted?.({
+				elapsedMs: state.timerAccumulatedMs,
+				hintsUsed: hintsUsedRef.current,
+			})
 		}
 	}, [
 		state.status,
@@ -320,11 +328,23 @@ export function GameScreen(props: GameScreenProps) {
 			const session = createHintSession(state)
 			setHintSession(session)
 			setHintView(presentHint(session))
+			hintsUsedRef.current += 1
+			trackAnalytics('hint_opened', {
+				difficulty: state.puzzle.difficultyPreset,
+			})
 			return
 		}
 		const next = advanceHintSession(hintSession)
 		setHintSession(next)
-		setHintView(presentHint(next))
+		const view = presentHint(next)
+		setHintView(view)
+		if (view.level >= 3 && next.step) {
+			trackAnalytics('hint_revealed', {
+				difficulty: state.puzzle.difficultyPreset,
+				technique: next.step.technique,
+				level: view.level,
+			})
+		}
 	}
 
 	const handleApplyHint = () => {
@@ -467,6 +487,11 @@ export function GameScreen(props: GameScreenProps) {
 				onNewGame={onNewGameFromCompletion}
 				onReplay={() => {
 					completedNotified.current = false
+					hintsUsedRef.current = 0
+					trackAnalytics('game_started', {
+						difficulty: state.puzzle.difficultyPreset,
+						source: 'replay',
+					})
 					dispatch({ type: 'REPLAY' })
 					dispatch({ type: 'TIMER_RESUME', now: Date.now() })
 				}}

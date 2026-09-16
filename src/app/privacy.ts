@@ -1,19 +1,21 @@
 /**
- * Privacy / developer constants — no invented analytics or store URLs.
+ * Privacy / developer constants — honest after ads + analytics integration.
  */
 
 export const DEVELOPER_NAME = 'ForestMusic'
 export const DEVELOPER_WEBSITE = 'https://forest-music.ru'
 
 /**
- * Placeholder slot for a published privacy-policy URL.
- * Leave null until an official policy page exists — do not invent one.
+ * Placeholder for a published privacy-policy URL.
+ * Remains null until an official page exists — release blocker for store listing.
  */
 export const PRIVACY_POLICY_URL: string | null = null
 
-/** Honest local-first notes shown on the About screen. */
+/** Honest notes shown on the About screen (post AppMetrica / Yandex Ads). */
 export const PRIVACY_NOTES: readonly string[] = [
-	'Сейчас игровые данные хранятся локально на устройстве.',
-	'Резервная копия создаётся только по вашему действию и сохраняется вами.',
-	'Реклама и аналитика появятся только после отдельной интеграции — сейчас ничего не отправляется.',
+	'Игровые данные (сохранения, статистика, обучение, Daily) хранятся локально на устройстве.',
+	'Резервная копия создаётся только по вашему действию и сохраняется вами; реклама и аналитика в неё не входят.',
+	'Приложение использует Яндекс AppMetrica (аналитика событий) и Яндекс Mobile Ads (реклама).',
+	'Основная игра работает offline; сбой сети или рекламы не блокирует геймплей.',
+	'Отдельная страница политики конфиденциальности пока не опубликована (PRIVACY_POLICY_URL отсутствует).',
 ]
