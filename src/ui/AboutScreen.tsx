@@ -5,7 +5,7 @@
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
-	APP_NAME,
+	APP_FULL_NAME,
 	APP_PACKAGE,
 	APP_VERSION,
 } from '../app/constants'
@@ -45,7 +45,7 @@ export function AboutScreen(props: AboutScreenProps) {
 				showsVerticalScrollIndicator={false}
 			>
 				<Text style={styles.title}>О приложении</Text>
-				<Text style={styles.appName}>{APP_NAME}</Text>
+				<Text style={styles.appName}>{APP_FULL_NAME}</Text>
 				<Text style={styles.meta}>Версия {APP_VERSION}</Text>
 				<Text style={styles.meta}>Пакет {APP_PACKAGE}</Text>
 

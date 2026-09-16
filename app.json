@@ -1,33 +1,40 @@
 {
   "expo": {
-    "name": "Киллер Судоку",
+    "name": "Киллер Судоку — суммы",
     "slug": "killer-sudoku",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon_gpt.png",
     "userInterfaceStyle": "light",
     "scheme": "killer-sudoku",
     "android": {
       "package": "com.calculatorplatform.killersudoku",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#1B4332",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#2F4A38",
+        "foregroundImage": "./assets/icon_gpt.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.calculatorplatform.killersudoku"
+      "bundleIdentifier": "com.calculatorplatform.killersudoku",
+      "icon": "./assets/icon_gpt.png"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon_gpt.png"
     },
     "plugins": [
       "expo-sharing",
-      "expo-document-picker"
+      "expo-document-picker",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 23
+          }
+        }
+      ]
     ]
   }
 }
