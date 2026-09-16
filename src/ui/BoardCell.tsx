@@ -21,6 +21,9 @@ export interface BoardCellProps {
 	related: boolean
 	sameNumber: boolean
 	conflict: boolean
+	/** Smart Hint highlight (secondary to conflict/selected). */
+	hintHighlight?: boolean
+	hintTarget?: boolean
 	accessibilityLabel: string
 	onPress: () => void
 }
@@ -39,6 +42,8 @@ function BoardCellComponent(props: BoardCellProps) {
 		related,
 		sameNumber,
 		conflict,
+		hintHighlight = false,
+		hintTarget = false,
 		accessibilityLabel,
 		onPress,
 	} = props
@@ -50,6 +55,12 @@ function BoardCellComponent(props: BoardCellProps) {
 		if (selected) {
 			return colors.selected
 		}
+		if (hintTarget) {
+			return colors.toolbarActive
+		}
+		if (hintHighlight) {
+			return colors.related
+		}
 		if (sameNumber) {
 			return colors.sameNumber
 		}
@@ -57,7 +68,7 @@ function BoardCellComponent(props: BoardCellProps) {
 			return colors.related
 		}
 		return colors.boardBackground
-	}, [conflict, selected, sameNumber, related])
+	}, [conflict, selected, sameNumber, related, hintHighlight, hintTarget])
 
 	const digitSize = Math.round(cellSize * typography.digitSizeRatio)
 	const sumSize = Math.max(

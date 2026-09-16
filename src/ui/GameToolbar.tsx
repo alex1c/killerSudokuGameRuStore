@@ -12,6 +12,8 @@ export interface GameToolbarProps {
 	onUndo: () => void
 	onToggleNotes: () => void
 	onErase: () => void
+	onHint?: () => void
+	hintActive?: boolean
 }
 
 export function GameToolbar(props: GameToolbarProps) {
@@ -22,6 +24,8 @@ export function GameToolbar(props: GameToolbarProps) {
 		onUndo,
 		onToggleNotes,
 		onErase,
+		onHint,
+		hintActive = false,
 	} = props
 
 	return (
@@ -50,6 +54,16 @@ export function GameToolbar(props: GameToolbarProps) {
 				disabled={disabled}
 				onPress={onErase}
 			/>
+			{onHint ? (
+				<ToolbarButton
+					symbol="💡"
+					label="Подсказка"
+					accessibilityLabel="Подсказка"
+					active={hintActive}
+					disabled={disabled}
+					onPress={onHint}
+				/>
+			) : null}
 		</View>
 	)
 }

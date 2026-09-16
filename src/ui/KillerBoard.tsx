@@ -26,10 +26,25 @@ export interface KillerBoardProps {
 	state: GameState
 	boardSize: number
 	onSelectCell: (cell: number) => void
+	highlightRelated?: boolean
+	highlightSameNumbers?: boolean
+	/** When true, also flag cells that disagree with the hidden solution. */
+	checkAgainstSolution?: boolean
+	hintHighlightCells?: ReadonlySet<number>
+	hintTargetCells?: ReadonlySet<number>
 }
 
 export function KillerBoard(props: KillerBoardProps) {
-	const { state, boardSize, onSelectCell } = props
+	const {
+		state,
+		boardSize,
+		onSelectCell,
+		highlightRelated = true,
+		highlightSameNumbers = true,
+		checkAgainstSolution = false,
+		hintHighlightCells,
+		hintTargetCells,
+	} = props
 	const cellSize = computeCellSize(boardSize)
 
 	const cellToCage = useMemo(
@@ -46,14 +61,14 @@ export function KillerBoard(props: KillerBoardProps) {
 	}, [state.puzzle.cages])
 
 	const related = useMemo(() => {
-		if (state.selectedCell === null) {
+		if (!highlightRelated || state.selectedCell === null) {
 			return new Set<number>()
 		}
 		return getRelatedCells(state.selectedCell)
-	}, [state.selectedCell])
+	}, [state.selectedCell, highlightRelated])
 
 	const sameNumber = useMemo(() => {
-		if (state.selectedCell === null) {
+		if (!highlightSameNumbers || state.selectedCell === null) {
 			return new Set<number>()
 		}
 		const value = getCellValue(state, state.selectedCell)
@@ -61,12 +76,23 @@ export function KillerBoard(props: KillerBoardProps) {
 			return new Set<number>()
 		}
 		return getSameNumberCells(state, value)
-	}, [state])
+	}, [state, highlightSameNumbers])
 
-	const conflicts = useMemo(
-		() => getConflictCells(state),
-		[state],
-	)
+	const conflicts = useMemo(() => {
+		const set = getConflictCells(state)
+		if (checkAgainstSolution) {
+			for (let i = 0; i < state.values.length; i += 1) {
+				const value = state.values[i] ?? 0
+				if (
+					value !== 0 &&
+					value !== (state.puzzle.solution[i] ?? 0)
+				) {
+					set.add(i)
+				}
+			}
+		}
+		return set
+	}, [state, checkAgainstSolution])
 
 	const cells = []
 	for (let row = 0; row < BOARD_SIZE; row += 1) {
@@ -87,6 +113,8 @@ export function KillerBoard(props: KillerBoardProps) {
 					related={related.has(index)}
 					sameNumber={sameNumber.has(index)}
 					conflict={conflicts.has(index)}
+					hintHighlight={hintHighlightCells?.has(index) ?? false}
+					hintTarget={hintTargetCells?.has(index) ?? false}
 					accessibilityLabel={getCellAccessibilityLabel(
 						state,
 						index,

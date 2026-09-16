@@ -104,12 +104,21 @@ function withCompletionCheck(state: GameState): GameState {
 }
 
 /**
+ * Optional gameplay preferences applied by the reducer (from Settings).
+ */
+export interface GameplayOptions {
+	autoClearNotes?: boolean
+}
+
+/**
  * Apply a gameplay action. Never mutates the previous state object.
  */
 export function gameReducer(
 	state: GameState,
 	action: GameAction,
+	options: GameplayOptions = {},
 ): GameState {
+	const autoClear = options.autoClearNotes !== false
 	if (
 		state.status === 'completed' &&
 		action.type !== 'REPLAY' &&
@@ -181,13 +190,19 @@ export function gameReducer(
 
 			const values = state.values.slice()
 			values[cell] = digit
-			const notes = autoClearNotes(
-				state.notes,
-				values,
-				cell,
-				digit,
-				state,
-			)
+			const notes = autoClear
+				? autoClearNotes(
+						state.notes,
+						values,
+						cell,
+						digit,
+						state,
+					)
+				: (() => {
+						const next = cloneNotes(state.notes)
+						next[cell] = 0
+						return next
+					})()
 
 			return withCompletionCheck({
 				...state,

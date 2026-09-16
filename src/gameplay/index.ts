@@ -10,6 +10,7 @@ export {
 	hashSeedLabel,
 	createRandomSeed,
 } from './types'
+export type { GameplayOptions } from './reducer'
 export {
 	createGame,
 	createGameFromPuzzle,
