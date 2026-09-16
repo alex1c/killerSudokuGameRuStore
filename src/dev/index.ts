@@ -28,4 +28,10 @@ export type {
 	GeneratorPerfPresetSummary,
 	GeneratorPerfRunRow,
 } from './generatorPerfQa'
+export {
+	runPuzzlePoolQa,
+	runPoolIsolationQa,
+	runPoolHeartbeatWhileFill,
+} from './puzzlePoolQa'
+export type { PoolQaResult } from './puzzlePoolQa'
 export { Phase4QaScreen } from './Phase4QaScreen'

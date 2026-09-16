@@ -186,4 +186,8 @@ Hermes was spending most of Hard/Expert time on an empty-board cage-only uniquen
 
 Dev screen: **Run Generator Perf QA** (Easy×3 / Medium×3 / Hard×5 / Expert×5, Metro excluded).
 
+## Phase 6Q — prepared puzzle pool
+
+Hard/Expert puzzles can be pre-generated into a local pool (`killerSudoku.puzzlePool.v1`) while the user is on Home. New Game Hard/Expert consumes a prepared item when available (near-instant); otherwise falls back to cooperative calibrated generation with a loading message. Easy/Medium stay on-demand. Pool refill pauses during gameplay and when the app is backgrounded. Generator version invalidates old pool items.
+
 The existing generator presets are not calibrated to the grader yet. Smart Hint UI is not implemented.

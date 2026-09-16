@@ -1,12 +1,14 @@
 /**
  * App shell: Home → Difficulty → Loading → Game, with Continue restore.
- * First launch never generates a puzzle.
+ * Phase 6Q: Hard/Expert prefer prepared pool; background fill only on Home.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
 	ActivityIndicator,
 	Alert,
+	AppState,
+	type AppStateStatus,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -15,13 +17,23 @@ import {
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Difficulty } from './src/game/difficulty'
-import { createGame, type GameState } from './src/gameplay'
+import {
+	createGame,
+	createGameFromPuzzle,
+	type GameState,
+} from './src/gameplay'
+import { createGameAsync } from './src/gameplay/createGameAsync'
+import {
+	createGenerationCancelToken,
+	type GenerationCancelToken,
+} from './src/game/killer/cooperative'
 import {
 	GameSaveRepository,
 	restoreGameFromSave,
 	type SavedGameV1,
 } from './src/storage'
 import { asyncStorageAdapter } from './src/storage/asyncStorageAdapter'
+import { getSharedPuzzlePoolController } from './src/pool/puzzlePoolController'
 import { colors } from './src/theme'
 import { DifficultyScreen } from './src/ui/DifficultyScreen'
 import { GameScreen } from './src/ui/GameScreen'
@@ -32,7 +44,13 @@ type Route =
 	| { name: 'boot' }
 	| { name: 'home' }
 	| { name: 'difficulty' }
-	| { name: 'loading'; difficulty: Difficulty; seed: number; visibleStartedAt: number }
+	| {
+			name: 'loading'
+			difficulty: Difficulty
+			seed: number
+			visibleStartedAt: number
+			fromPool: boolean
+	  }
 	| { name: 'play'; state: GameState }
 	| { name: 'qa' }
 
@@ -41,10 +59,15 @@ function AppRoot() {
 		() => new GameSaveRepository(asyncStorageAdapter),
 		[],
 	)
+	const poolController = useMemo(
+		() => getSharedPuzzlePoolController(asyncStorageAdapter),
+		[],
+	)
 	const [route, setRoute] = useState<Route>({ name: 'boot' })
 	const [savedGame, setSavedGame] = useState<SavedGameV1 | null>(null)
 	const loadTaskRef = useRef<{ cancel: () => void } | null>(null)
 	const loadEpochRef = useRef(0)
+	const genCancelRef = useRef<GenerationCancelToken | null>(null)
 
 	useEffect(() => {
 		let cancelled = false
@@ -61,8 +84,41 @@ function AppRoot() {
 			if (loadTaskRef.current !== null) {
 				loadTaskRef.current.cancel()
 			}
+			genCancelRef.current?.cancel()
+			poolController.pauseFill()
 		}
-	}, [saveRepository])
+	}, [saveRepository, poolController])
+
+	// Home idle → warm Hard/Expert pool (deferred until UI is interactive).
+	useEffect(() => {
+		if (route.name !== 'home') {
+			poolController.setHomeVisible(false)
+			if (route.name === 'play' || route.name === 'loading') {
+				poolController.setGameplayActive(true)
+			}
+			return
+		}
+		poolController.setGameplayActive(false)
+		poolController.setHomeVisible(true)
+		const timer = setTimeout(() => {
+			void poolController.ensureLoaded().then(() => {
+				void poolController.scheduleFill('home-idle')
+			})
+		}, 600)
+		return () => {
+			clearTimeout(timer)
+		}
+	}, [route.name, poolController])
+
+	useEffect(() => {
+		const onChange = (next: AppStateStatus) => {
+			poolController.setAppActive(next === 'active')
+		}
+		const sub = AppState.addEventListener('change', onChange)
+		return () => {
+			sub.remove()
+		}
+	}, [poolController])
 
 	const refreshSavedCard = useCallback(async () => {
 		const loaded = await saveRepository.load()
@@ -74,21 +130,60 @@ function AppRoot() {
 			if (loadTaskRef.current !== null) {
 				loadTaskRef.current.cancel()
 			}
+			genCancelRef.current?.cancel()
 			const epoch = ++loadEpochRef.current
 			const visibleStartedAt = Date.now()
-			setRoute({ name: 'loading', difficulty, seed, visibleStartedAt })
+			const usePool = difficulty === 'hard' || difficulty === 'expert'
+			setRoute({
+				name: 'loading',
+				difficulty,
+				seed,
+				visibleStartedAt,
+				fromPool: usePool,
+			})
+			poolController.setGameplayActive(true)
+			poolController.pauseFill()
 
-			// Defer generation off the current interaction tick (no InteractionManager —
-			// it is deprecated and triggers a yellow-box warning in __DEV__).
 			let cancelled = false
+			const cancelToken = createGenerationCancelToken()
+			genCancelRef.current = cancelToken
+
 			const timer = setTimeout(() => {
 				void (async () => {
 					try {
-						const state = createGame({ seed, difficulty })
+						let state: GameState
+						let fromPool = false
+						let retrievalMs = 0
+
+						if (usePool) {
+							const prepared = await poolController.consume(
+								difficulty,
+							)
+							if (
+								prepared !== null &&
+								!cancelled &&
+								epoch === loadEpochRef.current
+							) {
+								state = createGameFromPuzzle(prepared.puzzle)
+								fromPool = true
+								retrievalMs = prepared.retrievalMs
+							} else {
+								// Empty pool fallback — cooperative generate.
+								state = await createGameAsync({
+									seed,
+									difficulty,
+									cancelToken,
+									digYieldEvery: 3,
+								})
+							}
+						} else {
+							// Easy/Medium stay fast sync on-demand.
+							state = createGame({ seed, difficulty })
+						}
+
 						if (cancelled || epoch !== loadEpochRef.current) {
 							return
 						}
-						// Persist before entering play so force-stop still has Continue.
 						await saveRepository.savePlaying(state)
 						if (cancelled || epoch !== loadEpochRef.current) {
 							return
@@ -97,7 +192,7 @@ function AppRoot() {
 							const userVisibleLoadingMs =
 								Date.now() - visibleStartedAt
 							console.log(
-								`[KILLER_UI] userVisibleLoadingMs=${userVisibleLoadingMs}`,
+								`[KILLER_UI] userVisibleLoadingMs=${userVisibleLoadingMs} fromPool=${fromPool} retrievalMs=${retrievalMs.toFixed(1)} difficulty=${difficulty}`,
 							)
 						}
 						setRoute({ name: 'play', state })
@@ -117,6 +212,7 @@ function AppRoot() {
 					} finally {
 						if (epoch === loadEpochRef.current) {
 							loadTaskRef.current = null
+							genCancelRef.current = null
 						}
 					}
 				})()
@@ -125,11 +221,12 @@ function AppRoot() {
 			loadTaskRef.current = {
 				cancel: () => {
 					cancelled = true
+					cancelToken.cancel()
 					clearTimeout(timer)
 				},
 			}
 		},
-		[refreshSavedCard, saveRepository],
+		[poolController, refreshSavedCard, saveRepository],
 	)
 
 	const requestNewGame = useCallback(() => {
@@ -160,6 +257,8 @@ function AppRoot() {
 					if (!savedGame) {
 						return
 					}
+					poolController.setGameplayActive(true)
+					poolController.pauseFill()
 					const state = restoreGameFromSave(savedGame)
 					setRoute({ name: 'play', state })
 				}}
@@ -192,7 +291,10 @@ function AppRoot() {
 			)
 		}
 		return (
-			<Phase4QaScreen onBack={() => setRoute({ name: 'home' })} />
+			<Phase4QaScreen
+				onBack={() => setRoute({ name: 'home' })}
+				poolController={poolController}
+			/>
 		)
 	}
 
@@ -212,15 +314,20 @@ function AppRoot() {
 	}
 
 	if (route.name === 'loading') {
+		const message =
+			route.difficulty === 'hard' || route.difficulty === 'expert'
+				? 'Создаём сложную головоломку…'
+				: 'Создаём головоломку…'
 		return (
 			<LoadingView
-				message="Создаём головоломку…"
+				message={message}
 				onCancel={() => {
 					loadEpochRef.current += 1
 					if (loadTaskRef.current !== null) {
 						loadTaskRef.current.cancel()
 						loadTaskRef.current = null
 					}
+					genCancelRef.current?.cancel()
 					void refreshSavedCard().then(() =>
 						setRoute({ name: 'home' }),
 					)

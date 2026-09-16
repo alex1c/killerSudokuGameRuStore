@@ -631,3 +631,90 @@ export function digGivensIncremental(
 		uniquenessChecks,
 	}
 }
+
+export interface DigCooperativeOptions {
+	/** Yield to the event loop every N uniqueness probes (default 3). */
+	yieldEvery?: number
+	onYield?: () => Promise<void>
+	isCancelled?: () => boolean
+}
+
+/**
+ * Cooperative dig for background pool fill — same math as digGivensIncremental,
+ * but yields between uniqueness probes so the JS thread can service the UI.
+ */
+export async function digGivensIncrementalAsync(
+	solution: SudokuBoard,
+	cages: readonly KillerCage[],
+	order: readonly number[],
+	maxEmptyCells: number,
+	nodeLimit: number,
+	shouldStop?: (board: SudokuBoard, emptyCount: number) => boolean,
+	cooperative?: DigCooperativeOptions,
+): Promise<DigUniquenessResult> {
+	const board = cloneBoard(solution)
+	const state = createKillerState({ board, cages }, nodeLimit)
+	if (state === null) {
+		return {
+			board,
+			removedCells: [],
+			candidateDigAttempts: 0,
+			uniquenessChecks: 0,
+		}
+	}
+
+	const yieldEvery = cooperative?.yieldEvery ?? 3
+	const onYield = cooperative?.onYield
+	const isCancelled = cooperative?.isCancelled
+	const removedCells: number[] = []
+	let emptyCount = 0
+	let candidateDigAttempts = 0
+	let uniquenessChecks = 0
+
+	for (const index of order) {
+		if (isCancelled?.()) {
+			break
+		}
+		if (emptyCount >= maxEmptyCells) {
+			break
+		}
+		if (
+			shouldStop !== undefined &&
+			emptyCount > 0 &&
+			shouldStop(state.board, emptyCount)
+		) {
+			break
+		}
+		if (board[index] === 0) {
+			continue
+		}
+		const backup = board[index]!
+		candidateDigAttempts += 1
+
+		remove(state, index, backup)
+		state.nodes = 0
+		uniquenessChecks += 1
+
+		const alternate = searchAlternate(state, solution)
+		if (alternate !== 0) {
+			place(state, index, backup)
+		} else {
+			emptyCount += 1
+			removedCells.push(index)
+		}
+
+		if (
+			onYield !== undefined &&
+			uniquenessChecks % yieldEvery === 0
+		) {
+			await onYield()
+		}
+	}
+
+	return {
+		board: state.board,
+		removedCells,
+		candidateDigAttempts,
+		uniquenessChecks,
+	}
+}

@@ -43,3 +43,29 @@ export type {
 	LoadSavedGameResult,
 } from './savedGame'
 export { GameSaveRepository } from './gameSaveRepository'
+export {
+	PUZZLE_POOL_SCHEMA_VERSION,
+	PUZZLE_POOL_STORAGE_KEY,
+	POOL_TARGET_COUNTS,
+	POOLED_DIFFICULTIES,
+	POOL_RECENT_SEEDS_LIMIT,
+	createEmptyPuzzlePool,
+	parsePuzzlePool,
+	serializePuzzlePool,
+	createPreparedPuzzle,
+	consumePreparedPuzzle,
+	appendPreparedPuzzle,
+	countPrepared,
+	poolNeedsFill,
+	nextFillDifficulty,
+	isSeedBlocked,
+	preparedPuzzleToKillerPuzzle,
+	serializeKillerPuzzle,
+} from './puzzlePool'
+export type {
+	PuzzlePoolV1,
+	PreparedPuzzleV1,
+	PooledDifficulty,
+	LoadPuzzlePoolResult,
+} from './puzzlePool'
+export { PuzzlePoolRepository } from './puzzlePoolRepository'

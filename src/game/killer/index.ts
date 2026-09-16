@@ -30,6 +30,7 @@ export {
 	countKillerSolutions,
 	hasUniqueKillerSolution,
 	digGivensIncremental,
+	digGivensIncrementalAsync,
 	DEFAULT_KILLER_NODE_LIMIT,
 	type KillerPuzzleInput,
 	type DigUniquenessResult,
@@ -45,6 +46,20 @@ export {
 	type DigGivensResult,
 	type CalibratedAttemptResult,
 } from './generateKillerPuzzle'
+
+export {
+	generateKillerPuzzleAsync,
+	type GenerateKillerPuzzleAsyncOptions,
+} from './generateAsync'
+
+export {
+	yieldToEventLoop,
+	createGenerationCancelToken,
+	GenerationCancelledError,
+	type GenerationCancelToken,
+} from './cooperative'
+
+export { PUZZLE_GENERATOR_VERSION } from './generatorVersion'
 
 export {
 	calibrateBoardToGrade,

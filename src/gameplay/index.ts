@@ -17,6 +17,10 @@ export {
 	resolveGameSeed,
 } from './createGame'
 export type { CreateGameOptions } from './createGame'
+export {
+	createGameAsync,
+	createGameFromPreparedPuzzle,
+} from './createGameAsync'
 export { gameReducer } from './reducer'
 export {
 	getElapsedMs,
