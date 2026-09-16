@@ -49,6 +49,7 @@ export {
 	getSameNumberCells,
 	countDigitOccurrences,
 	getConflictCells,
+	getSolutionMismatchCells,
 	isBoardComplete,
 	isBoardValid,
 	isPuzzleSolved,

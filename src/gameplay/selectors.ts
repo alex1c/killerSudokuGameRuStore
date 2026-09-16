@@ -278,6 +278,21 @@ export function isBoardValid(state: GameState): boolean {
 }
 
 /**
+ * Cells whose main digit disagrees with the hidden solution.
+ * Used for immediate / on-complete error UX — never reveals the correct digit.
+ */
+export function getSolutionMismatchCells(state: GameState): Set<number> {
+	const set = new Set<number>()
+	for (let i = 0; i < BOARD_CELLS; i += 1) {
+		const value = state.values[i] ?? 0
+		if (value !== 0 && value !== (state.puzzle.solution[i] ?? 0)) {
+			set.add(i)
+		}
+	}
+	return set
+}
+
+/**
  * Completion check: full + explicit-valid + matches hidden solution.
  * Solution is consulted only at this completion gate.
  */

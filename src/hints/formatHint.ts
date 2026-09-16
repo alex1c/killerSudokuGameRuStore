@@ -51,7 +51,7 @@ function techniqueTitle(technique: TechniqueId): string {
 		case 'cage_intersection':
 			return 'Пересечение области'
 		case 'innie_outie':
-			return 'Innie / Outie'
+			return 'Внутри и снаружи блока'
 		default:
 			return 'Логический шаг'
 	}
@@ -101,55 +101,58 @@ function level2(step: LogicalStep): { title: string; body: string } {
 	switch (step.technique) {
 		case 'naked_single':
 			return {
-				title: 'Логика',
-				body: 'В этой клетке остался только один возможный кандидат.',
+				title: 'Объяснение',
+				body: 'В этой клетке остался только один возможный вариант.',
 			}
 		case 'hidden_single':
 			return {
-				title: 'Логика',
+				title: 'Объяснение',
 				body: `Цифра ${digit ?? '?'} может стоять только в одной клетке этой ${unitPhrase(data)}.`,
 			}
 		case 'cage_single': {
 			const remaining =
 				typeof data.remaining === 'number' ? data.remaining : '?'
 			return {
-				title: 'Логика',
+				title: 'Объяснение',
 				body: `В области с суммой ${sum} осталась одна пустая клетка — в ней должно быть ${remaining}.`,
 			}
 		}
 		case 'cage_combination':
 			return {
-				title: 'Логика',
+				title: 'Объяснение',
 				body: `Для области с суммой ${sum} возможны только определённые комбинации цифр.`,
 			}
 		case 'cage_candidate_elimination':
 			return {
-				title: 'Логика',
-				body: `Некоторые кандидаты не входят ни в одну допустимую комбинацию области ${sum}.`,
+				title: 'Объяснение',
+				body:
+					typeof digit === 'number'
+						? `Цифра ${digit} здесь невозможна, потому что не входит ни в одну допустимую комбинацию области ${sum}.`
+						: `Некоторые цифры здесь невозможны, потому что не входят ни в одну допустимую комбинацию области ${sum}.`,
 			}
 		case 'locked_candidate':
 			return {
-				title: 'Логика',
-				body: `Кандидаты цифры ${digit ?? '?'} в ${unitPhrase(data)} ограничены одной линией — её можно исключить снаружи.`,
+				title: 'Объяснение',
+				body: `Цифра ${digit ?? '?'} в ${unitPhrase(data)} встречается только на одной линии — её можно исключить в остальных клетках этой линии.`,
 			}
 		case 'rule_of_45':
 			return {
-				title: 'Логика',
+				title: 'Объяснение',
 				body: 'Сумма цифр 1–9 равна 45. По известным клеткам блока можно найти недостающую сумму.',
 			}
 		case 'cage_intersection':
 			return {
-				title: 'Логика',
-				body: `Область ${sum} пересекается с рядом или столбцом — это сужает кандидатов.`,
+				title: 'Объяснение',
+				body: `Область ${sum} пересекается с рядом или столбцом — это сужает возможные цифры.`,
 			}
 		case 'innie_outie':
 			return {
-				title: 'Логика',
-				body: 'Часть области выходит за границы блока — сравните суммы «внутри» и «снаружи».',
+				title: 'Объяснение',
+				body: 'Часть области выходит за границы блока — сравните суммы клеток внутри блока и снаружи.',
 			}
 		default:
 			return {
-				title: 'Логика',
+				title: 'Объяснение',
 				body: techniqueTitle(step.technique),
 			}
 	}

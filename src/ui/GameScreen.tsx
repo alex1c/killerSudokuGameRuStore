@@ -11,6 +11,7 @@ import {
 	useState,
 } from 'react'
 import {
+	Alert,
 	AppState,
 	Pressable,
 	StyleSheet,
@@ -27,11 +28,14 @@ import {
 	formatElapsed,
 	gameReducer,
 	getElapsedMs,
+	isBoardComplete,
+	isPuzzleSolved,
 	type GameAction,
 	type GameState,
 } from '../gameplay'
 import type { GameSaveRepository } from '../storage'
 import type { SettingsV1 } from '../settings'
+import { playHaptic, playSound } from '../feedback'
 import {
 	advanceHintSession,
 	createHintSession,
@@ -78,9 +82,12 @@ export function GameScreen(props: GameScreenProps) {
 	const [now, setNow] = useState(() => Date.now())
 	const [hintSession, setHintSession] = useState<HintSession | null>(null)
 	const [hintView, setHintView] = useState<FormattedHint | null>(null)
+	/** on_complete: highlight solution mismatches after a full-board check. */
+	const [revealMismatches, setRevealMismatches] = useState(false)
 	const stateRef = useRef(state)
 	const meaningfulRef = useRef(false)
 	const completedNotified = useRef(false)
+	const onCompleteWarned = useRef(false)
 
 	useEffect(() => {
 		stateRef.current = state
@@ -92,9 +99,17 @@ export function GameScreen(props: GameScreenProps) {
 			!completedNotified.current
 		) {
 			completedNotified.current = true
+			void playHaptic(settings.hapticEnabled, 'success')
+			void playSound(settings.soundEnabled, 'completion')
 			onCompleted?.(state.timerAccumulatedMs)
 		}
-	}, [state.status, state.timerAccumulatedMs, onCompleted])
+	}, [
+		state.status,
+		state.timerAccumulatedMs,
+		onCompleted,
+		settings.hapticEnabled,
+		settings.soundEnabled,
+	])
 
 	const persist = useCallback(
 		(next: GameState, stamp: number = Date.now()) => {
@@ -121,22 +136,24 @@ export function GameScreen(props: GameScreenProps) {
 				meaningfulRef.current = true
 				onMeaningfulAction?.()
 			}
-			setState((current) => {
-				const next = gameReducer(current, action, gameplayOptions)
-				const shouldPersist =
-					action.type === 'INPUT_DIGIT' ||
-					action.type === 'ERASE' ||
-					action.type === 'UNDO' ||
-					action.type === 'REPLAY' ||
-					action.type === 'TIMER_PAUSE' ||
-					action.type === 'COMPLETE' ||
-					action.type === 'DEV_FILL_SOLUTION'
-				if (shouldPersist || next.status === 'completed') {
-					persist(next)
-				}
-				return next
-			})
-			// Board changed — dismiss active hint to avoid stale highlights.
+
+			const current = stateRef.current
+			const next = gameReducer(current, action, gameplayOptions)
+			stateRef.current = next
+			setState(next)
+
+			const shouldPersist =
+				action.type === 'INPUT_DIGIT' ||
+				action.type === 'ERASE' ||
+				action.type === 'UNDO' ||
+				action.type === 'REPLAY' ||
+				action.type === 'TIMER_PAUSE' ||
+				action.type === 'COMPLETE' ||
+				action.type === 'DEV_FILL_SOLUTION'
+			if (shouldPersist || next.status === 'completed') {
+				persist(next)
+			}
+
 			if (
 				action.type === 'INPUT_DIGIT' ||
 				action.type === 'ERASE' ||
@@ -146,8 +163,70 @@ export function GameScreen(props: GameScreenProps) {
 				setHintSession(null)
 				setHintView(null)
 			}
+			if (action.type === 'REPLAY') {
+				onCompleteWarned.current = false
+				setRevealMismatches(false)
+			}
+
+			let playError = false
+			let playInput = false
+
+			if (
+				action.type === 'INPUT_DIGIT' &&
+				!next.notesMode &&
+				next.selectedCell !== null
+			) {
+				const cell = next.selectedCell
+				const value = next.values[cell] ?? 0
+				const expected = next.puzzle.solution[cell] ?? 0
+				const isMismatch = value !== 0 && value !== expected
+				if (settings.errorChecking === 'immediate' && isMismatch) {
+					playError = true
+				} else {
+					playInput = true
+				}
+			}
+
+			if (
+				settings.errorChecking === 'on_complete' &&
+				(action.type === 'INPUT_DIGIT' ||
+					action.type === 'ERASE' ||
+					action.type === 'UNDO')
+			) {
+				if (
+					isBoardComplete(next) &&
+					!isPuzzleSolved(next) &&
+					!onCompleteWarned.current
+				) {
+					onCompleteWarned.current = true
+					setRevealMismatches(true)
+					playError = true
+					Alert.alert(
+						'Есть ошибки',
+						'Есть ошибки. Проверьте заполненные клетки.',
+					)
+				} else if (!isBoardComplete(next)) {
+					onCompleteWarned.current = false
+					setRevealMismatches(false)
+				}
+			}
+
+			if (playError) {
+				void playHaptic(settings.hapticEnabled, 'error')
+				void playSound(settings.soundEnabled, 'error')
+			} else if (playInput) {
+				void playHaptic(settings.hapticEnabled, 'light')
+				void playSound(settings.soundEnabled, 'input')
+			}
 		},
-		[gameplayOptions, onMeaningfulAction, persist],
+		[
+			gameplayOptions,
+			onMeaningfulAction,
+			persist,
+			settings.errorChecking,
+			settings.hapticEnabled,
+			settings.soundEnabled,
+		],
 	)
 
 	useEffect(() => {
@@ -214,6 +293,10 @@ export function GameScreen(props: GameScreenProps) {
 
 	const gameplayLocked = state.status === 'completed'
 
+	const checkAgainstSolution =
+		settings.errorChecking === 'immediate' ||
+		(settings.errorChecking === 'on_complete' && revealMismatches)
+
 	const hintHighlightCells = useMemo(() => {
 		if (!hintView) {
 			return undefined
@@ -232,6 +315,7 @@ export function GameScreen(props: GameScreenProps) {
 		if (gameplayLocked) {
 			return
 		}
+		void playHaptic(settings.hapticEnabled, 'selection')
 		if (hintSession === null) {
 			const session = createHintSession(state)
 			setHintSession(session)
@@ -253,6 +337,7 @@ export function GameScreen(props: GameScreenProps) {
 			setHintView(null)
 			return
 		}
+		void playHaptic(settings.hapticEnabled, 'selection')
 		dispatch({ type: 'SELECT_CELL', cell: placement.cell })
 		dispatch({ type: 'INPUT_DIGIT', digit: placement.digit })
 		setHintSession(null)
@@ -296,9 +381,7 @@ export function GameScreen(props: GameScreenProps) {
 					boardSize={boardSize}
 					highlightRelated={settings.highlightRelated}
 					highlightSameNumbers={settings.highlightSameNumbers}
-					checkAgainstSolution={
-						settings.errorChecking === 'immediate'
-					}
+					checkAgainstSolution={checkAgainstSolution}
 					hintHighlightCells={hintHighlightCells}
 					hintTargetCells={hintTargetCells}
 					onSelectCell={(cell) => {
@@ -318,6 +401,7 @@ export function GameScreen(props: GameScreenProps) {
 							<Pressable
 								onPress={handleHintPress}
 								accessibilityRole="button"
+								accessibilityLabel="Следующий уровень подсказки"
 							>
 								<Text style={styles.hintAction}>Далее</Text>
 							</Pressable>
@@ -326,6 +410,7 @@ export function GameScreen(props: GameScreenProps) {
 							<Pressable
 								onPress={handleApplyHint}
 								accessibilityRole="button"
+								accessibilityLabel="Показать ход"
 							>
 								<Text style={styles.hintAction}>
 									Показать ход
@@ -338,6 +423,7 @@ export function GameScreen(props: GameScreenProps) {
 								setHintView(null)
 							}}
 							accessibilityRole="button"
+							accessibilityLabel="Закрыть подсказку"
 						>
 							<Text style={styles.hintDismiss}>Закрыть</Text>
 						</Pressable>
@@ -399,13 +485,14 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'space-between',
 		paddingHorizontal: spacing.screenPadding,
-		marginBottom: spacing.headerGap,
-		minHeight: 40,
+		paddingVertical: spacing.headerGap,
+		gap: 8,
 	},
 	homeLink: {
 		fontSize: 22,
+		fontWeight: '700',
 		color: colors.secondaryText,
-		width: 28,
+		minWidth: 28,
 	},
 	headerCenter: {
 		flex: 1,
@@ -417,68 +504,68 @@ const styles = StyleSheet.create({
 		color: colors.headerText,
 	},
 	difficulty: {
-		fontSize: 12,
+		fontSize: 13,
 		color: colors.secondaryText,
-		marginTop: 1,
+		fontWeight: '600',
 	},
 	timer: {
 		fontSize: typography.timerSize,
-		fontWeight: '500',
-		color: colors.secondaryText,
-		fontVariant: ['tabular-nums'],
+		fontWeight: '600',
+		color: colors.primaryText,
 		minWidth: 52,
 		textAlign: 'right',
 	},
 	boardWrap: {
 		alignItems: 'center',
 		justifyContent: 'center',
-		flexGrow: 1,
+		paddingVertical: 4,
 	},
 	hintCard: {
 		marginHorizontal: spacing.screenPadding,
 		marginBottom: 6,
-		padding: 10,
-		borderRadius: 10,
+		padding: 12,
+		borderRadius: 12,
+		backgroundColor: colors.boardBackground,
 		borderWidth: 1,
 		borderColor: colors.keypadBorder,
-		backgroundColor: colors.boardBackground,
+		gap: 6,
 	},
 	hintTitle: {
+		fontSize: 14,
 		fontWeight: '700',
-		color: colors.primaryText,
-		marginBottom: 4,
+		color: colors.playerText,
 	},
 	hintBody: {
-		color: colors.secondaryText,
 		fontSize: 13,
 		lineHeight: 18,
+		color: colors.primaryText,
 	},
 	hintActions: {
 		flexDirection: 'row',
 		gap: 16,
-		marginTop: 8,
+		marginTop: 4,
 	},
 	hintAction: {
-		color: colors.playerText,
-		fontWeight: '700',
 		fontSize: 14,
+		fontWeight: '700',
+		color: colors.playerText,
 	},
 	hintDismiss: {
-		color: colors.secondaryText,
-		fontWeight: '600',
 		fontSize: 14,
+		fontWeight: '600',
+		color: colors.secondaryText,
 	},
 	devButton: {
 		alignSelf: 'center',
+		paddingVertical: 4,
+		paddingHorizontal: 10,
 		marginBottom: 4,
-		paddingHorizontal: 8,
-		paddingVertical: 2,
 	},
 	devButtonText: {
 		fontSize: 11,
 		color: colors.secondaryText,
 	},
 	devSpacer: {
-		height: 4,
+		height: 8,
 	},
 })

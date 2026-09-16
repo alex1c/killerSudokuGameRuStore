@@ -57,6 +57,31 @@ export function localDateString(date: Date): LocalDateString {
 }
 
 /**
+ * Lexicographic compare for YYYY-MM-DD local date strings.
+ * Negative if a < b, zero if equal, positive if a > b.
+ */
+export function compareLocalDateStrings(
+	a: LocalDateString,
+	b: LocalDateString,
+): number {
+	if (a < b) {
+		return -1
+	}
+	if (a > b) {
+		return 1
+	}
+	return 0
+}
+
+/** True when dateStr is strictly after todayStr (future Daily day). */
+export function isFutureLocalDate(
+	dateStr: LocalDateString,
+	todayStr: LocalDateString,
+): boolean {
+	return compareLocalDateStrings(dateStr, todayStr) > 0
+}
+
+/**
  * Deterministic daily puzzle seed from date, difficulty, and generator version.
  */
 export function dailySeed(

@@ -148,21 +148,31 @@ export function DailyScreen(props: DailyScreenProps) {
 						const dayNum = Number(dateStr.slice(-2))
 						const completed = isDayCompleted(progress.days[dateStr])
 						const isToday = dateStr === todayStr
+						const isFuture = dateStr > todayStr
 						const hardOrExpert =
 							progress.days[dateStr]?.hard === true ||
 							progress.days[dateStr]?.expert === true
 						return (
 							<View
 								key={dateStr}
+								accessibilityLabel={
+									isToday
+										? `Сегодня, ${dayNum}`
+										: isFuture
+											? `Будущая дата ${dayNum}`
+											: `День ${dayNum}${completed ? ', решено' : ''}`
+								}
 								style={[
 									styles.dayCell,
 									isToday ? styles.dayToday : null,
+									isFuture ? styles.dayFuture : null,
 								]}
 							>
 								<Text
 									style={[
 										styles.dayNumber,
 										isToday ? styles.dayNumberToday : null,
+										isFuture ? styles.dayNumberFuture : null,
 									]}
 								>
 									{dayNum}
@@ -366,6 +376,12 @@ const styles = StyleSheet.create({
 	dayNumberToday: {
 		color: colors.playerText,
 		fontWeight: '700',
+	},
+	dayFuture: {
+		opacity: 0.45,
+	},
+	dayNumberFuture: {
+		color: colors.keypadDimmed,
 	},
 	dot: {
 		width: 6,
