@@ -143,13 +143,11 @@ export function SettingsScreen(props: SettingsScreenProps) {
 						onChange({ showTimer: !settings.showTimer })
 					}
 				/>
-				<ToggleRow
+				{/* Sound SFX are not bundled yet — show an honest disabled row,
+				    not a working toggle that implies audio already plays. */}
+				<InfoRow
 					label="Звук"
-					subtitle="Короткие звуки ввода; в этой сборке воспроизведение ещё не подключено."
-					value={settings.soundEnabled}
-					onToggle={() =>
-						onChange({ soundEnabled: !settings.soundEnabled })
-					}
+					subtitle="Звуковые эффекты пока не подключены в этой версии."
 				/>
 				<ToggleRow
 					label="Вибрация"
@@ -252,6 +250,23 @@ function ToggleRow(props: {
 				/>
 			</View>
 		</Pressable>
+	)
+}
+
+/** Non-interactive settings row for unavailable features (no fake toggle). */
+function InfoRow(props: { label: string; subtitle: string }) {
+	const { label, subtitle } = props
+	return (
+		<View
+			style={styles.toggleCard}
+			accessibilityRole="text"
+			accessibilityLabel={`${label}. ${subtitle}`}
+		>
+			<View style={styles.toggleCopy}>
+				<Text style={styles.toggleLabel}>{label}</Text>
+				<Text style={styles.toggleSubtitle}>{subtitle}</Text>
+			</View>
+		</View>
 	)
 }
 

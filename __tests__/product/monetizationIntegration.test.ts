@@ -27,8 +27,8 @@ import {
 	APP_PACKAGE,
 	APP_VERSION,
 	APP_VERSION_CODE,
-} from '../../src/app/constants'
-import { PRIVACY_NOTES, PRIVACY_POLICY_URL } from '../../src/app/privacy'
+} from '../../src/product/constants'
+import { PRIVACY_NOTES, PRIVACY_POLICY_URL } from '../../src/product/privacy'
 import appJson from '../../app.json'
 
 jest.mock('yandex-mobile-ads', () => ({

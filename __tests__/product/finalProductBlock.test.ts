@@ -14,8 +14,8 @@ import { playHaptic } from '../../src/feedback/haptics'
 import { playSound } from '../../src/feedback/sound'
 import { ADS_POLICY } from '../../src/ads'
 import { ANALYTICS_EVENTS, trackAnalytics } from '../../src/analytics'
-import { DEVELOPER_NAME, DEVELOPER_WEBSITE, PRIVACY_POLICY_URL } from '../../src/app/privacy'
-import { APP_VERSION } from '../../src/app/constants'
+import { DEVELOPER_NAME, DEVELOPER_WEBSITE, PRIVACY_POLICY_URL } from '../../src/product/privacy'
+import { APP_VERSION } from '../../src/product/constants'
 import {
 	createGameFromPuzzle,
 	gameReducer,

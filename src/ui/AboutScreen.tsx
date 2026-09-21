@@ -8,8 +8,8 @@ import {
 	APP_FULL_NAME,
 	APP_PACKAGE,
 	APP_VERSION,
-} from '../app/constants'
-import { DEVELOPER_NAME, DEVELOPER_WEBSITE, PRIVACY_NOTES } from '../app/privacy'
+} from '../product/constants'
+import { DEVELOPER_NAME, DEVELOPER_WEBSITE, PRIVACY_NOTES } from '../product/privacy'
 import { colors, spacing } from '../theme'
 
 export interface AboutScreenProps {

@@ -3,7 +3,7 @@
  */
 
 import AppMetrica from '@appmetrica/react-native-analytics'
-import { APP_VERSION, APP_VERSION_CODE } from '../app/constants'
+import { APP_VERSION, APP_VERSION_CODE } from '../product/constants'
 import {
 	type AnalyticsClient,
 	type AnalyticsEventName,

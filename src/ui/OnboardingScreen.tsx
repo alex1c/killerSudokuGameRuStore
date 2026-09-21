@@ -10,7 +10,7 @@ import {
 	View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { APP_NAME } from '../app/constants'
+import { APP_NAME } from '../product/constants'
 import { colors, spacing } from '../theme'
 
 export interface OnboardingScreenProps {
