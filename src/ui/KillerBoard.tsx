@@ -9,7 +9,6 @@ import { BOARD_SIZE } from '../game/sudoku'
 import {
 	buildCellCageMap,
 	getCageBorderFlags,
-	getCageSumAnchor,
 	getCellAccessibilityLabel,
 	getCellNotesMask,
 	getCellValue,
@@ -21,22 +20,15 @@ import {
 } from '../gameplay'
 import { borders, colors } from '../theme'
 import { BoardCell } from './BoardCell'
-import {
-	allocateColumnWidths,
-	computeBoardGeometry,
-} from './boardLayout'
+import { getCageSumForCell } from './boardCellVisuals'
+import { allocateColumnWidths, computeBoardGeometry } from './boardLayout'
 
 export interface KillerBoardProps {
 	state: GameState
-	/**
-	 * Optional fallback size when parent has not measured yet.
-	 * Prefer container onLayout measurement for the real device width.
-	 */
 	boardSize?: number
 	onSelectCell: (cell: number) => void
 	highlightRelated?: boolean
 	highlightSameNumbers?: boolean
-	/** When true, also flag cells that disagree with the hidden solution. */
 	checkAgainstSolution?: boolean
 	hintHighlightCells?: ReadonlySet<number>
 	hintTargetCells?: ReadonlySet<number>
@@ -55,75 +47,52 @@ export function KillerBoard(props: KillerBoardProps) {
 	} = props
 
 	const [measuredWidth, setMeasuredWidth] = useState<number | null>(null)
-
 	const geometry = useMemo(() => {
 		if (measuredWidth !== null && measuredWidth > 0) {
 			return computeBoardGeometry(measuredWidth)
 		}
 		if (fallbackOuter !== undefined && fallbackOuter > 0) {
-			// fallbackOuter is treated as available width (legacy prop).
 			return computeBoardGeometry(fallbackOuter)
 		}
 		return computeBoardGeometry(320)
 	}, [measuredWidth, fallbackOuter])
-
 	const columnWidths = useMemo(
 		() => allocateColumnWidths(geometry.gridSize),
 		[geometry.gridSize],
 	)
-
 	const cellToCage = useMemo(
 		() => buildCellCageMap(state.puzzle.cages),
 		[state.puzzle.cages],
 	)
-
-	const sumAnchors = useMemo(() => {
-		const map = new Map<number, number>()
-		for (const cage of state.puzzle.cages) {
-			map.set(getCageSumAnchor(cage), cage.sum)
-		}
-		return map
-	}, [state.puzzle.cages])
-
 	const related = useMemo(() => {
 		if (!highlightRelated || state.selectedCell === null) {
 			return new Set<number>()
 		}
 		return getRelatedCells(state.selectedCell)
 	}, [state.selectedCell, highlightRelated])
-
 	const sameNumber = useMemo(() => {
 		if (!highlightSameNumbers || state.selectedCell === null) {
 			return new Set<number>()
 		}
 		const value = getCellValue(state, state.selectedCell)
-		if (value === 0) {
-			return new Set<number>()
-		}
+		if (value === 0) return new Set<number>()
 		return getSameNumberCells(state, value)
 	}, [state, highlightSameNumbers])
-
 	const conflicts = useMemo(() => {
 		const set = getConflictCells(state)
 		if (checkAgainstSolution) {
 			for (let i = 0; i < state.values.length; i += 1) {
 				const value = state.values[i] ?? 0
-				if (
-					value !== 0 &&
-					value !== (state.puzzle.solution[i] ?? 0)
-				) {
+				if (value !== 0 && value !== (state.puzzle.solution[i] ?? 0)) {
 					set.add(i)
 				}
 			}
 		}
 		return set
 	}, [state, checkAgainstSolution])
-
 	const handleLayout = (event: LayoutChangeEvent) => {
 		const next = Math.floor(event.nativeEvent.layout.width)
-		if (next > 0 && next !== measuredWidth) {
-			setMeasuredWidth(next)
-		}
+		if (next > 0 && next !== measuredWidth) setMeasuredWidth(next)
 	}
 
 	const rows = []
@@ -141,7 +110,7 @@ export function KillerBoard(props: KillerBoardProps) {
 					value={getCellValue(state, index)}
 					notesMask={getCellNotesMask(state, index)}
 					isGiven={isGivenCell(state, index)}
-					cageSum={sumAnchors.get(index) ?? null}
+					cageSum={getCageSumForCell(index, state.puzzle.cages)}
 					cageBorders={getCageBorderFlags(index, cellToCage)}
 					selected={state.selectedCell === index}
 					related={related.has(index)}
@@ -149,10 +118,7 @@ export function KillerBoard(props: KillerBoardProps) {
 					conflict={conflicts.has(index)}
 					hintHighlight={hintHighlightCells?.has(index) ?? false}
 					hintTarget={hintTargetCells?.has(index) ?? false}
-					accessibilityLabel={getCellAccessibilityLabel(
-						state,
-						index,
-					)}
+					accessibilityLabel={getCellAccessibilityLabel(state, index)}
 					onPress={() => onSelectCell(index)}
 				/>,
 			)
@@ -178,12 +144,7 @@ export function KillerBoard(props: KillerBoardProps) {
 				]}
 				accessibilityLabel="Игровое поле 9 на 9"
 			>
-				<View
-					style={{
-						width: geometry.gridSize,
-						height: geometry.gridSize,
-					}}
-				>
+				<View style={{ width: geometry.gridSize, height: geometry.gridSize }}>
 					{rows}
 				</View>
 			</View>
@@ -192,19 +153,12 @@ export function KillerBoard(props: KillerBoardProps) {
 }
 
 const styles = StyleSheet.create({
-	measure: {
-		width: '100%',
-		alignItems: 'center',
-	},
+	measure: { width: '100%', alignItems: 'center' },
 	board: {
 		backgroundColor: colors.boardBackground,
 		alignItems: 'center',
 		justifyContent: 'center',
-		// Do not clip the 9th column — geometry already reserves outer border.
 		overflow: 'visible',
 	},
-	row: {
-		flexDirection: 'row',
-		width: '100%',
-	},
+	row: { flexDirection: 'row', width: '100%' },
 })

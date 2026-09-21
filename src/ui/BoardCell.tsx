@@ -1,12 +1,15 @@
 /**
- * Single board cell: digit / notes, cage sum, highlights, cage borders.
+ * Single board cell: digit / user notes, cage sum, highlights, cage borders.
  */
 
 import { memo, useMemo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { CageBorderFlags } from '../gameplay'
-import { notesToDigits } from '../gameplay'
 import { borders, colors, typography } from '../theme'
+import {
+	getNoteGridPosition,
+	getVisibleNoteDigits,
+} from './boardCellVisuals'
 
 export interface BoardCellProps {
 	row: number
@@ -49,54 +52,29 @@ function BoardCellComponent(props: BoardCellProps) {
 	} = props
 
 	const backgroundColor = useMemo(() => {
-		if (conflict) {
-			return colors.conflict
-		}
-		if (selected) {
-			return colors.selected
-		}
-		if (hintTarget) {
-			return colors.toolbarActive
-		}
-		if (hintHighlight) {
-			return colors.related
-		}
-		if (sameNumber) {
-			return colors.sameNumber
-		}
-		if (related) {
-			return colors.related
-		}
+		if (conflict) return colors.conflict
+		if (selected) return colors.selected
+		if (hintTarget) return colors.toolbarActive
+		if (hintHighlight) return colors.related
+		if (sameNumber) return colors.sameNumber
+		if (related) return colors.related
 		return colors.boardBackground
 	}, [conflict, selected, sameNumber, related, hintHighlight, hintTarget])
 
 	const digitSize = Math.round(cellSize * typography.digitSizeRatio)
-	const sumSize = Math.max(
-		9,
-		Math.round(cellSize * typography.sumSizeRatio),
-	)
+	const sumSize = Math.max(11, Math.round(cellSize * typography.sumSizeRatio))
 	const noteSize = Math.max(
-		9,
-		Math.round(cellSize * Math.max(typography.noteSizeRatio, 0.18)),
+		10,
+		Math.round(cellSize * Math.max(typography.noteSizeRatio, 0.2)),
 	)
-	const noteDigits = value === 0 ? notesToDigits(notesMask) : []
+	const noteDigits = getVisibleNoteDigits(value, notesMask)
 
-	const borderTopWidth =
-		row % 3 === 0 ? borders.gridThick : borders.gridThin
-	const borderLeftWidth =
-		col % 3 === 0 ? borders.gridThick : borders.gridThin
+	const borderTopWidth = row % 3 === 0 ? borders.gridThick : borders.gridThin
+	const borderLeftWidth = col % 3 === 0 ? borders.gridThick : borders.gridThin
 	const borderRightWidth =
-		col === 8
-			? borders.gridThick
-			: col % 3 === 2
-				? borders.gridThick
-				: 0
+		col === 8 ? borders.gridThick : col % 3 === 2 ? borders.gridThick : 0
 	const borderBottomWidth =
-		row === 8
-			? borders.gridThick
-			: row % 3 === 2
-				? borders.gridThick
-				: 0
+		row === 8 ? borders.gridThick : row % 3 === 2 ? borders.gridThick : 0
 
 	return (
 		<Pressable
@@ -129,15 +107,11 @@ function BoardCellComponent(props: BoardCellProps) {
 					styles.cageInset,
 					{
 						borderTopWidth: cageBorders.top ? borders.cageInset : 0,
-						borderRightWidth: cageBorders.right
-							? borders.cageInset
-							: 0,
+						borderRightWidth: cageBorders.right ? borders.cageInset : 0,
 						borderBottomWidth: cageBorders.bottom
 							? borders.cageInset
 							: 0,
-						borderLeftWidth: cageBorders.left
-							? borders.cageInset
-							: 0,
+						borderLeftWidth: cageBorders.left ? borders.cageInset : 0,
 						borderColor: colors.cageBorder,
 					},
 				]}
@@ -172,30 +146,25 @@ function BoardCellComponent(props: BoardCellProps) {
 				</Text>
 			) : (
 				<View style={styles.notesGrid} pointerEvents="none">
-					{[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
-						<Text
-							key={digit}
-							style={[
-								styles.note,
-								{
-									fontSize: noteSize,
-									lineHeight: noteSize + 1,
-									// Leave top-left clearer when a cage sum is present.
-									opacity:
-										cageSum !== null && digit === 1
-											? 0.75
-											: 1,
-									color: noteDigits.includes(
-										digit as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
-									)
-										? colors.noteText
-										: 'transparent',
-								},
-							]}
-						>
-							{digit}
-						</Text>
-					))}
+					{noteDigits.map((digit) => {
+						const position = getNoteGridPosition(digit)
+						return (
+							<Text
+								key={digit}
+								style={[
+									styles.note,
+									{
+										fontSize: noteSize,
+										lineHeight: noteSize + 1,
+										left: `${(position.col / 3) * 100}%`,
+										top: `${(position.row / 3) * 100}%`,
+									},
+								]}
+							>
+								{digit}
+							</Text>
+						)
+					})}
 				</View>
 			)}
 		</Pressable>
@@ -217,27 +186,35 @@ const styles = StyleSheet.create({
 	},
 	sum: {
 		position: 'absolute',
-		top: 1,
+		top: 2,
 		left: 3,
-		color: colors.secondaryText,
-		fontWeight: '600',
-		zIndex: 2,
+		paddingHorizontal: 2,
+		paddingVertical: 0,
+		borderRadius: 2,
+		backgroundColor: colors.boardBackground,
+		color: colors.sumText,
+		fontWeight: '800',
+		zIndex: 3,
 	},
 	digit: {
 		textAlign: 'center',
 		zIndex: 1,
 	},
 	notesGrid: {
-		...StyleSheet.absoluteFill,
-		marginTop: 10,
-		marginHorizontal: 2,
-		marginBottom: 2,
-		flexDirection: 'row',
-		flexWrap: 'wrap',
+		position: 'absolute',
+		top: 12,
+		left: 2,
+		right: 2,
+		bottom: 2,
 	},
 	note: {
+		position: 'absolute',
 		width: '33.333%',
+		height: '33.333%',
 		textAlign: 'center',
+		textAlignVertical: 'center',
+		includeFontPadding: false,
 		fontWeight: '500',
+		color: colors.noteText,
 	},
 })

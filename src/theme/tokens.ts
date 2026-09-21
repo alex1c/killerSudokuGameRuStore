@@ -12,7 +12,8 @@ export const colors = {
 	playerText: '#1D6A5C',
 	gridThin: '#C9C2B4',
 	gridThick: '#3D3A34',
-	cageBorder: '#6B705C',
+	cageBorder: '#46664F',
+	sumText: '#173F35',
 	selected: '#B7E4C7',
 	related: '#E9F5EE',
 	sameNumber: '#D8F3DC',
@@ -42,8 +43,8 @@ export const typography = {
 	titleSize: 20,
 	timerSize: 16,
 	digitSizeRatio: 0.46,
-	sumSizeRatio: 0.2,
-	noteSizeRatio: 0.16,
+	sumSizeRatio: 0.26,
+	noteSizeRatio: 0.2,
 	keypadDigitSize: 20,
 	toolbarLabelSize: 11,
 } as const
@@ -51,6 +52,6 @@ export const typography = {
 export const borders = {
 	gridThin: 1,
 	gridThick: 2.5,
-	cageInset: 2,
+	cageInset: 2.5,
 	outer: 3,
 } as const
