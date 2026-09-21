@@ -67,6 +67,10 @@ function BoardCellComponent(props: BoardCellProps) {
 		10,
 		Math.round(cellSize * Math.max(typography.noteSizeRatio, 0.2)),
 	)
+	const noteLineHeight = Math.max(
+		noteSize + 8,
+		Math.ceil(noteSize * 1.35),
+	)
 	const noteDigits = getVisibleNoteDigits(value, notesMask)
 
 	const borderTopWidth = row % 3 === 0 ? borders.gridThick : borders.gridThin
@@ -149,20 +153,30 @@ function BoardCellComponent(props: BoardCellProps) {
 					{noteDigits.map((digit) => {
 						const position = getNoteGridPosition(digit)
 						return (
-							<Text
+							<View
 								key={digit}
 								style={[
-									styles.note,
+									styles.noteSlot,
 									{
-										fontSize: noteSize,
-										lineHeight: noteSize + 1,
 										left: `${(position.col / 3) * 100}%`,
 										top: `${(position.row / 3) * 100}%`,
 									},
 								]}
 							>
-								{digit}
-							</Text>
+								<Text
+									style={[
+										styles.note,
+										{
+											fontSize: noteSize,
+											lineHeight: noteLineHeight,
+											minHeight: noteLineHeight,
+											height: noteLineHeight,
+										},
+									]}
+								>
+									{digit}
+								</Text>
+							</View>
 						)
 					})}
 				</View>
@@ -205,15 +219,20 @@ const styles = StyleSheet.create({
 		top: 12,
 		left: 2,
 		right: 2,
-		bottom: 2,
+		bottom: 8,
 	},
-	note: {
+	noteSlot: {
 		position: 'absolute',
 		width: '33.333%',
 		height: '33.333%',
+		alignItems: 'center',
+		justifyContent: 'center',
+		overflow: 'visible',
+	},
+	note: {
 		textAlign: 'center',
 		textAlignVertical: 'center',
-		includeFontPadding: false,
+		includeFontPadding: true,
 		fontWeight: '500',
 		color: colors.noteText,
 	},
