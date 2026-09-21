@@ -6,7 +6,7 @@ export const DEVELOPER_NAME = 'ForestMusic'
 export const DEVELOPER_WEBSITE = 'https://forest-music.ru'
 
 /**
- * Published GitHub Pages privacy policy (docs/privacy.html on branch main).
+ * Published GitHub Pages privacy policy (docs/privacy.md → privacy.html).
  * https://alex1c.github.io/killerSudokuGameRuStore/privacy.html
  */
 export const PRIVACY_POLICY_URL =
