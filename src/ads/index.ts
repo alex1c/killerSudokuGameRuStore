@@ -6,6 +6,7 @@ export {
 	YANDEX_AD_UNITS,
 	BANNER_UNIT_BY_PLACEMENT,
 	APP_OPEN_AD,
+	GAME_BANNER,
 	ADS_POLICY,
 	bannerUnitId,
 	isGameScreenBannerAllowed,

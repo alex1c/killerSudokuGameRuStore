@@ -1,5 +1,6 @@
 /**
- * Undo / Notes / Erase toolbar for Phase 3.
+ * Undo / Notes / Erase / Hint toolbar.
+ * Notes active state must be unmistakable on a real device.
  */
 
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -29,41 +30,52 @@ export function GameToolbar(props: GameToolbarProps) {
 	} = props
 
 	return (
-		<View style={styles.row}>
-			<ToolbarButton
-				symbol="↶"
-				label="Отмена"
-				accessibilityLabel="Отменить"
-				disabled={disabled || !canUndo}
-				onPress={onUndo}
-			/>
-			<ToolbarButton
-				symbol="✎"
-				label="Заметки"
-				accessibilityLabel={
-					notesMode ? 'Заметки включены' : 'Заметки выключены'
-				}
-				active={notesMode}
-				disabled={disabled}
-				onPress={onToggleNotes}
-			/>
-			<ToolbarButton
-				symbol="⌫"
-				label="Стереть"
-				accessibilityLabel="Стереть"
-				disabled={disabled}
-				onPress={onErase}
-			/>
-			{onHint ? (
-				<ToolbarButton
-					symbol="💡"
-					label="Подсказка"
-					accessibilityLabel="Подсказка"
-					active={hintActive}
-					disabled={disabled}
-					onPress={onHint}
-				/>
+		<View style={styles.wrap}>
+			{notesMode ? (
+				<Text
+					style={styles.notesBanner}
+					accessibilityLiveRegion="polite"
+				>
+					Режим заметок · цифры ставятся мелкими кандидатами
+				</Text>
 			) : null}
+			<View style={styles.row}>
+				<ToolbarButton
+					symbol="↶"
+					label="Отмена"
+					accessibilityLabel="Отменить"
+					disabled={disabled || !canUndo}
+					onPress={onUndo}
+				/>
+				<ToolbarButton
+					symbol="✎"
+					label={notesMode ? 'Заметки' : 'Заметки'}
+					subLabel={notesMode ? 'ВКЛ' : 'ВЫКЛ'}
+					accessibilityLabel={
+						notesMode ? 'Заметки включены' : 'Заметки выключены'
+					}
+					active={notesMode}
+					disabled={disabled}
+					onPress={onToggleNotes}
+				/>
+				<ToolbarButton
+					symbol="⌫"
+					label="Стереть"
+					accessibilityLabel="Стереть"
+					disabled={disabled}
+					onPress={onErase}
+				/>
+				{onHint ? (
+					<ToolbarButton
+						symbol="💡"
+						label="Подсказка"
+						accessibilityLabel="Подсказка"
+						active={hintActive}
+						disabled={disabled}
+						onPress={onHint}
+					/>
+				) : null}
+			</View>
 		</View>
 	)
 }
@@ -71,6 +83,7 @@ export function GameToolbar(props: GameToolbarProps) {
 interface ToolbarButtonProps {
 	symbol: string
 	label: string
+	subLabel?: string
 	accessibilityLabel: string
 	active?: boolean
 	disabled?: boolean
@@ -81,6 +94,7 @@ function ToolbarButton(props: ToolbarButtonProps) {
 	const {
 		symbol,
 		label,
+		subLabel,
 		accessibilityLabel,
 		active = false,
 		disabled = false,
@@ -101,33 +115,65 @@ function ToolbarButton(props: ToolbarButtonProps) {
 				disabled ? styles.buttonDisabled : null,
 			]}
 		>
-			<Text style={styles.symbol}>{symbol}</Text>
-			<Text style={styles.label}>{label}</Text>
+			<Text
+				style={[styles.symbol, active ? styles.symbolActive : null]}
+			>
+				{symbol}
+			</Text>
+			<Text
+				style={[styles.label, active ? styles.labelActive : null]}
+			>
+				{label}
+			</Text>
+			{subLabel ? (
+				<Text
+					style={[
+						styles.subLabel,
+						active ? styles.subLabelActive : null,
+					]}
+				>
+					{subLabel}
+				</Text>
+			) : null}
 		</Pressable>
 	)
 }
 
 const styles = StyleSheet.create({
+	wrap: {
+		paddingHorizontal: spacing.screenPadding,
+		marginBottom: 8,
+		gap: 6,
+	},
+	notesBanner: {
+		textAlign: 'center',
+		fontSize: 13,
+		fontWeight: '700',
+		color: colors.playerText,
+		backgroundColor: colors.toolbarActive,
+		borderRadius: 8,
+		paddingVertical: 6,
+		paddingHorizontal: 10,
+		overflow: 'hidden',
+	},
 	row: {
 		flexDirection: 'row',
 		gap: spacing.toolbarGap,
-		paddingHorizontal: spacing.screenPadding,
-		marginBottom: 8,
 	},
 	button: {
 		flex: 1,
-		minHeight: 52,
+		minHeight: 56,
 		alignItems: 'center',
 		justifyContent: 'center',
 		backgroundColor: colors.toolbarBackground,
 		borderRadius: 12,
-		borderWidth: 1,
+		borderWidth: 2,
 		borderColor: colors.keypadBorder,
 		paddingVertical: 6,
 	},
 	buttonActive: {
-		backgroundColor: colors.toolbarActive,
-		borderColor: colors.playerText,
+		backgroundColor: colors.playerText,
+		borderColor: colors.givenText,
 	},
 	buttonPressed: {
 		opacity: 0.85,
@@ -140,9 +186,25 @@ const styles = StyleSheet.create({
 		color: colors.primaryText,
 		marginBottom: 2,
 	},
+	symbolActive: {
+		color: '#FFFFFF',
+	},
 	label: {
 		fontSize: typography.toolbarLabelSize,
 		color: colors.secondaryText,
-		fontWeight: '600',
+		fontWeight: '700',
+	},
+	labelActive: {
+		color: '#FFFFFF',
+	},
+	subLabel: {
+		marginTop: 1,
+		fontSize: 10,
+		fontWeight: '800',
+		letterSpacing: 0.6,
+		color: colors.secondaryText,
+	},
+	subLabelActive: {
+		color: '#E8F5E9',
 	},
 })

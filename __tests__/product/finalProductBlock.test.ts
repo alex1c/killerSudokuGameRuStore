@@ -436,13 +436,13 @@ describe('learning polish', () => {
 })
 
 describe('ads and analytics foundations', () => {
-	it('exposes policy without production IDs and no-ops analytics', () => {
+	it('exposes policy, game banner slot, and privacy URL', () => {
 		expect(ADS_POLICY.interstitialDuringPlay).toBe(false)
-		expect(ADS_POLICY.bannerOnGameScreen).toBe(false)
+		expect(ADS_POLICY.bannerOnGameScreen).toBe(true)
 		expect(ADS_POLICY.maxInterstitialsPerSession).toBe(1)
 		expect(ANALYTICS_EVENTS.game_started).toBe('game_started')
 		expect(() => trackAnalytics('hint_opened')).not.toThrow()
-		expect(PRIVACY_POLICY_URL).toBeNull()
+		expect(PRIVACY_POLICY_URL).toContain('privacy.html')
 		expect(DEVELOPER_NAME).toBe('ForestMusic')
 		expect(DEVELOPER_WEBSITE).toContain('forest-music.ru')
 		expect(APP_VERSION.length).toBeGreaterThan(0)

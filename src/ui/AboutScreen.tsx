@@ -9,7 +9,12 @@ import {
 	APP_PACKAGE,
 	APP_VERSION,
 } from '../product/constants'
-import { DEVELOPER_NAME, DEVELOPER_WEBSITE, PRIVACY_NOTES } from '../product/privacy'
+import {
+	DEVELOPER_NAME,
+	DEVELOPER_WEBSITE,
+	PRIVACY_NOTES,
+	PRIVACY_POLICY_URL,
+} from '../product/privacy'
 import { colors, spacing } from '../theme'
 
 export interface AboutScreenProps {
@@ -70,6 +75,19 @@ export function AboutScreen(props: AboutScreenProps) {
 							{line}
 						</Text>
 					))}
+					{PRIVACY_POLICY_URL ? (
+						<Pressable
+							onPress={() => {
+								void Linking.openURL(PRIVACY_POLICY_URL)
+							}}
+							accessibilityRole="link"
+							accessibilityLabel="Политика конфиденциальности"
+						>
+							<Text style={styles.link}>
+								Политика конфиденциальности
+							</Text>
+						</Pressable>
+					) : null}
 				</View>
 			</ScrollView>
 		</View>

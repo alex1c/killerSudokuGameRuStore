@@ -2,8 +2,9 @@
  * Settings — game toggles, backup, help, about.
  */
 
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { PRIVACY_POLICY_URL } from '../product/privacy'
 import type { ErrorCheckingMode, SettingsV1 } from '../settings/types'
 import { colors, spacing } from '../theme'
 
@@ -205,6 +206,15 @@ export function SettingsScreen(props: SettingsScreenProps) {
 							accessibilityLabel="О приложении"
 							onPress={onOpenAbout}
 						/>
+						{PRIVACY_POLICY_URL ? (
+							<ActionRow
+								label="Политика конфиденциальности"
+								accessibilityLabel="Политика конфиденциальности"
+								onPress={() => {
+									void Linking.openURL(PRIVACY_POLICY_URL)
+								}}
+							/>
+						) : null}
 					</>
 				) : null}
 			</ScrollView>

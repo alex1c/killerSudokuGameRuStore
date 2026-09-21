@@ -6,6 +6,7 @@ import {
 	ADS_POLICY,
 	APP_OPEN_AD,
 	BANNER_UNIT_BY_PLACEMENT,
+	GAME_BANNER,
 	InterstitialLimiter,
 	YANDEX_AD_UNITS,
 	__resetInterstitialLimiterForTests,
@@ -143,17 +144,20 @@ describe('interstitial limiter', () => {
 })
 
 describe('banner placements', () => {
-	it('maps Home/Stats/Learning IDs and forbids GameScreen', () => {
+	it('maps Home/Stats/Learning/Game IDs', () => {
 		expect(bannerUnitId('home')).toBe('R-M-20057709-1')
 		expect(bannerUnitId('stats')).toBe('R-M-20057709-2')
 		expect(bannerUnitId('learning')).toBe('R-M-20057709-3')
-		expect(BANNER_UNIT_BY_PLACEMENT.home).toBe(YANDEX_AD_UNITS.homeBanner)
-		expect(isGameScreenBannerAllowed()).toBe(false)
-		expect(ADS_POLICY.bannerOnGameScreen).toBe(false)
+		expect(bannerUnitId('game')).toBe('R-M-20057709-7')
+		expect(GAME_BANNER.unitId).toBe('R-M-20057709-7')
+		expect(BANNER_UNIT_BY_PLACEMENT.game).toBe(YANDEX_AD_UNITS.gameBanner)
+		expect(isGameScreenBannerAllowed()).toBe(true)
+		expect(ADS_POLICY.bannerOnGameScreen).toBe(true)
 		expect(ADS_POLICY.allowedBannerPlacements).toEqual([
 			'home',
 			'stats',
 			'learning',
+			'game',
 		])
 	})
 })
@@ -207,8 +211,10 @@ describe('analytics', () => {
 })
 
 describe('privacy honesty', () => {
-	it('discloses analytics/ads and keeps privacy URL null', () => {
-		expect(PRIVACY_POLICY_URL).toBeNull()
+	it('discloses analytics/ads and wires GitHub Pages privacy URL', () => {
+		expect(PRIVACY_POLICY_URL).toBe(
+			'https://alex1c.github.io/killerSudokuGameRuStore/privacy.html',
+		)
 		const joined = PRIVACY_NOTES.join(' ')
 		expect(joined).toContain('AppMetrica')
 		expect(joined).toContain('Mobile Ads')

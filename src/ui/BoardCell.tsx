@@ -76,8 +76,8 @@ function BoardCellComponent(props: BoardCellProps) {
 		Math.round(cellSize * typography.sumSizeRatio),
 	)
 	const noteSize = Math.max(
-		7,
-		Math.round(cellSize * typography.noteSizeRatio),
+		9,
+		Math.round(cellSize * Math.max(typography.noteSizeRatio, 0.18)),
 	)
 	const noteDigits = value === 0 ? notesToDigits(notesMask) : []
 

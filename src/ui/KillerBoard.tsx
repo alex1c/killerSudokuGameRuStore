@@ -1,9 +1,10 @@
 /**
  * 9×9 Killer Sudoku board renderer.
+ * Uses measured container width + reserved outer border so all 9 columns fit.
  */
 
-import { useMemo } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useMemo, useState } from 'react'
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native'
 import { BOARD_SIZE } from '../game/sudoku'
 import {
 	buildCellCageMap,
@@ -20,11 +21,18 @@ import {
 } from '../gameplay'
 import { borders, colors } from '../theme'
 import { BoardCell } from './BoardCell'
-import { computeCellSize } from './boardLayout'
+import {
+	allocateColumnWidths,
+	computeBoardGeometry,
+} from './boardLayout'
 
 export interface KillerBoardProps {
 	state: GameState
-	boardSize: number
+	/**
+	 * Optional fallback size when parent has not measured yet.
+	 * Prefer container onLayout measurement for the real device width.
+	 */
+	boardSize?: number
 	onSelectCell: (cell: number) => void
 	highlightRelated?: boolean
 	highlightSameNumbers?: boolean
@@ -37,7 +45,7 @@ export interface KillerBoardProps {
 export function KillerBoard(props: KillerBoardProps) {
 	const {
 		state,
-		boardSize,
+		boardSize: fallbackOuter,
 		onSelectCell,
 		highlightRelated = true,
 		highlightSameNumbers = true,
@@ -45,7 +53,24 @@ export function KillerBoard(props: KillerBoardProps) {
 		hintHighlightCells,
 		hintTargetCells,
 	} = props
-	const cellSize = computeCellSize(boardSize)
+
+	const [measuredWidth, setMeasuredWidth] = useState<number | null>(null)
+
+	const geometry = useMemo(() => {
+		if (measuredWidth !== null && measuredWidth > 0) {
+			return computeBoardGeometry(measuredWidth)
+		}
+		if (fallbackOuter !== undefined && fallbackOuter > 0) {
+			// fallbackOuter is treated as available width (legacy prop).
+			return computeBoardGeometry(fallbackOuter)
+		}
+		return computeBoardGeometry(320)
+	}, [measuredWidth, fallbackOuter])
+
+	const columnWidths = useMemo(
+		() => allocateColumnWidths(geometry.gridSize),
+		[geometry.gridSize],
+	)
 
 	const cellToCage = useMemo(
 		() => buildCellCageMap(state.puzzle.cages),
@@ -94,16 +119,25 @@ export function KillerBoard(props: KillerBoardProps) {
 		return set
 	}, [state, checkAgainstSolution])
 
-	const cells = []
+	const handleLayout = (event: LayoutChangeEvent) => {
+		const next = Math.floor(event.nativeEvent.layout.width)
+		if (next > 0 && next !== measuredWidth) {
+			setMeasuredWidth(next)
+		}
+	}
+
+	const rows = []
 	for (let row = 0; row < BOARD_SIZE; row += 1) {
+		const cells = []
 		for (let col = 0; col < BOARD_SIZE; col += 1) {
 			const index = row * BOARD_SIZE + col
+			const cellWidth = columnWidths[col]!
 			cells.push(
 				<BoardCell
 					key={index}
 					row={row}
 					col={col}
-					cellSize={cellSize}
+					cellSize={cellWidth}
 					value={getCellValue(state, index)}
 					notesMask={getCellNotesMask(state, index)}
 					isGiven={isGivenCell(state, index)}
@@ -123,30 +157,54 @@ export function KillerBoard(props: KillerBoardProps) {
 				/>,
 			)
 		}
+		rows.push(
+			<View key={`row-${row}`} style={styles.row}>
+				{cells}
+			</View>,
+		)
 	}
 
 	return (
-		<View
-			style={[
-				styles.board,
-				{
-					width: boardSize,
-					height: boardSize,
-					borderWidth: borders.outer,
-					borderColor: colors.gridThick,
-				},
-			]}
-		>
-			{cells}
+		<View style={styles.measure} onLayout={handleLayout}>
+			<View
+				style={[
+					styles.board,
+					{
+						width: geometry.boardOuterSize,
+						height: geometry.boardOuterSize,
+						borderWidth: borders.outer,
+						borderColor: colors.gridThick,
+					},
+				]}
+				accessibilityLabel="Игровое поле 9 на 9"
+			>
+				<View
+					style={{
+						width: geometry.gridSize,
+						height: geometry.gridSize,
+					}}
+				>
+					{rows}
+				</View>
+			</View>
 		</View>
 	)
 }
 
 const styles = StyleSheet.create({
+	measure: {
+		width: '100%',
+		alignItems: 'center',
+	},
 	board: {
-		flexDirection: 'row',
-		flexWrap: 'wrap',
 		backgroundColor: colors.boardBackground,
-		overflow: 'hidden',
+		alignItems: 'center',
+		justifyContent: 'center',
+		// Do not clip the 9th column — geometry already reserves outer border.
+		overflow: 'visible',
+	},
+	row: {
+		flexDirection: 'row',
+		width: '100%',
 	},
 })

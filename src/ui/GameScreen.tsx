@@ -47,7 +47,7 @@ import {
 	type HintSession,
 } from '../hints'
 import { colors, spacing, typography } from '../theme'
-import { computeBoardSize } from './boardLayout'
+import { AdBanner, isGameScreenBannerAllowed } from '../ads'
 import { CompletionOverlay } from './CompletionOverlay'
 import { GameToolbar } from './GameToolbar'
 import { KillerBoard } from './KillerBoard'
@@ -82,7 +82,17 @@ export function GameScreen(props: GameScreenProps) {
 	} = props
 	const insets = useSafeAreaInsets()
 	const { width } = useWindowDimensions()
-	const boardSize = useMemo(() => computeBoardSize(width), [width])
+	/** Available width inside screen padding — KillerBoard also measures onLayout. */
+	const boardAvailableWidth = useMemo(
+		() => Math.max(0, width - spacing.screenPadding * 2),
+		[width],
+	)
+	const showGameBanner = isGameScreenBannerAllowed()
+	/** Stable banner element — not recreated when gameplay state changes. */
+	const gameBanner = useMemo(
+		() => (showGameBanner ? <AdBanner placement="game" /> : null),
+		[showGameBanner],
+	)
 	const [state, setState] = useState<GameState>(initialState)
 	const [now, setNow] = useState(() => Date.now())
 	const [hintSession, setHintSession] = useState<HintSession | null>(null)
@@ -415,7 +425,7 @@ export function GameScreen(props: GameScreenProps) {
 			<View style={styles.boardWrap}>
 				<KillerBoard
 					state={state}
-					boardSize={boardSize}
+					boardSize={boardAvailableWidth}
 					highlightRelated={settings.highlightRelated}
 					highlightSameNumbers={settings.highlightSameNumbers}
 					checkAgainstSolution={checkAgainstSolution}
@@ -479,6 +489,14 @@ export function GameScreen(props: GameScreenProps) {
 				<View style={styles.devSpacer} />
 			)}
 
+			<NumberKeypad
+				disabled={gameplayLocked}
+				dimmedDigits={dimmedDigits}
+				onDigit={(digit: Digit) =>
+					dispatch({ type: 'INPUT_DIGIT', digit })
+				}
+			/>
+
 			<GameToolbar
 				notesMode={state.notesMode}
 				canUndo={state.history.length > 0}
@@ -490,13 +508,9 @@ export function GameScreen(props: GameScreenProps) {
 				onHint={handleHintPress}
 			/>
 
-			<NumberKeypad
-				disabled={gameplayLocked}
-				dimmedDigits={dimmedDigits}
-				onDigit={(digit: Digit) =>
-					dispatch({ type: 'INPUT_DIGIT', digit })
-				}
-			/>
+			{/* Leftover space keeps the board priority; banner sits above safe area. */}
+			<View style={styles.flexSpacer} />
+			<View style={styles.gameBannerSlot}>{gameBanner}</View>
 
 			<CompletionOverlay
 				visible={state.status === 'completed'}
@@ -558,9 +572,21 @@ const styles = StyleSheet.create({
 		textAlign: 'right',
 	},
 	boardWrap: {
+		width: '100%',
+		paddingHorizontal: spacing.screenPadding,
 		alignItems: 'center',
 		justifyContent: 'center',
 		paddingVertical: 4,
+	},
+	flexSpacer: {
+		flexGrow: 1,
+		flexShrink: 1,
+		minHeight: 0,
+	},
+	gameBannerSlot: {
+		width: '100%',
+		minHeight: 0,
+		justifyContent: 'flex-end',
 	},
 	hintCard: {
 		marginHorizontal: spacing.screenPadding,

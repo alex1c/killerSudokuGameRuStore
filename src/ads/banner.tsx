@@ -1,13 +1,11 @@
 /**
- * Collapsible sticky banner for Home / Stats / Learning — never GameScreen.
+ * Collapsible sticky banner — Home / Stats / Learning / Game.
+ * Stable identity: do not remount on digit/notes gameplay updates.
  */
 
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
-import {
-	BannerAdSize,
-	BannerView,
-} from 'yandex-mobile-ads'
+import { BannerAdSize, BannerView } from 'yandex-mobile-ads'
 import {
 	ADS_POLICY,
 	bannerUnitId,
@@ -22,7 +20,7 @@ export interface AdBannerProps {
 /**
  * Sticky banner that collapses to zero height until loaded / on failure.
  */
-export function AdBanner(props: AdBannerProps) {
+function AdBannerComponent(props: AdBannerProps) {
 	const { placement } = props
 	const { width } = useWindowDimensions()
 	const [size, setSize] = useState<BannerAdSize | null>(null)
@@ -48,6 +46,7 @@ export function AdBanner(props: AdBannerProps) {
 		return () => {
 			cancelled = true
 		}
+		// Only re-size when window width changes — not on every gameplay tick.
 	}, [width])
 
 	if (!ADS_POLICY.allowedBannerPlacements.includes(placement)) {
@@ -61,12 +60,11 @@ export function AdBanner(props: AdBannerProps) {
 
 	return (
 		<View
-			style={[
-				styles.wrap,
-				visible ? null : styles.collapsed,
-			]}
+			style={[styles.wrap, visible ? null : styles.collapsed]}
 			accessibilityElementsHidden={!visible}
-			importantForAccessibility={visible ? 'yes' : 'no-hide-descendants'}
+			importantForAccessibility={
+				visible ? 'yes' : 'no-hide-descendants'
+			}
 		>
 			<BannerView
 				size={size}
@@ -82,6 +80,9 @@ export function AdBanner(props: AdBannerProps) {
 		</View>
 	)
 }
+
+/** Memoized so parent GameScreen re-renders do not remount the native ad. */
+export const AdBanner = memo(AdBannerComponent)
 
 const styles = StyleSheet.create({
 	wrap: {
