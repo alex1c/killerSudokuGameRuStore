@@ -49,3 +49,6 @@ coverage/
 credentials.json
 .env
 .env.*
+# release artifacts and external signing config
+signing.properties
+release-artifacts/
