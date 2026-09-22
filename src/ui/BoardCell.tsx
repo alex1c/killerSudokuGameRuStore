@@ -64,7 +64,7 @@ function BoardCellComponent(props: BoardCellProps) {
 	const digitSize = Math.round(cellSize * typography.digitSizeRatio)
 	const sumSize = Math.max(11, Math.round(cellSize * typography.sumSizeRatio))
 	const noteSize = Math.max(
-		10,
+		11,
 		Math.round(cellSize * Math.max(typography.noteSizeRatio, 0.2)),
 	)
 	const noteLineHeight = Math.max(
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
 	},
 	sum: {
 		position: 'absolute',
-		top: 2,
+		top: 1,
 		left: 3,
 		paddingHorizontal: 2,
 		paddingVertical: 0,

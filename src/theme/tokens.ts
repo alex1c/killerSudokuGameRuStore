@@ -45,7 +45,7 @@ export const typography = {
 	timerSize: 16,
 	digitSizeRatio: 0.46,
 	sumSizeRatio: 0.26,
-	noteSizeRatio: 0.2,
+	noteSizeRatio: 0.22,
 	keypadDigitSize: 20,
 	toolbarLabelSize: 11,
 } as const
