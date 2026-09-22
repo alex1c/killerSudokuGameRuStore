@@ -10,6 +10,11 @@
     "android": {
       "package": "com.calculatorplatform.killersudoku",
       "versionCode": 1,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#2F4A38",
         "foregroundImage": "./assets/icon_gpt.png"
