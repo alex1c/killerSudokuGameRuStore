@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { CageBorderFlags } from '../gameplay'
 import { borders, colors, typography } from '../theme'
 import {
+	getNoteGridInsets,
 	getNoteGridPosition,
 	getVisibleNoteDigits,
 } from './boardCellVisuals'
@@ -72,6 +73,7 @@ function BoardCellComponent(props: BoardCellProps) {
 		Math.ceil(noteSize * 1.35),
 	)
 	const noteDigits = getVisibleNoteDigits(value, notesMask)
+	const noteGridInsets = getNoteGridInsets(cellSize, cageSum !== null)
 
 	const borderTopWidth = row % 3 === 0 ? borders.gridThick : borders.gridThin
 	const borderLeftWidth = col % 3 === 0 ? borders.gridThick : borders.gridThin
@@ -150,7 +152,10 @@ function BoardCellComponent(props: BoardCellProps) {
 					{value}
 				</Text>
 			) : (
-				<View style={styles.notesGrid} pointerEvents="none">
+				<View
+					style={[styles.notesGrid, noteGridInsets]}
+					pointerEvents="none"
+				>
 					{noteDigits.map((digit) => {
 						const position = getNoteGridPosition(digit)
 						return (
