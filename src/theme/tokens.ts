@@ -13,7 +13,8 @@ export const colors = {
 	gridThin: '#C9C2B4',
 	gridThick: '#3D3A34',
 	cageBorder: '#46664F',
-	sumText: '#173F35',
+	boardCageBorder: '#6A816D',
+	sumText: '#8A5A18',
 	selected: '#B7E4C7',
 	related: '#E9F5EE',
 	sameNumber: '#D8F3DC',
@@ -28,7 +29,7 @@ export const colors = {
 	overlayCard: '#FFFDF8',
 	headerText: '#1B4332',
 	solvedBanner: '#2D6A4F',
-	noteText: '#52796F',
+	noteText: '#66766D',
 } as const
 
 export const spacing = {
@@ -52,6 +53,6 @@ export const typography = {
 export const borders = {
 	gridThin: 1,
 	gridThick: 2.5,
-	cageInset: 2.5,
+	cageInset: 2,
 	outer: 3,
 } as const

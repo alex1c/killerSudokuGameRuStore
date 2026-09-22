@@ -31,14 +31,6 @@ export function GameToolbar(props: GameToolbarProps) {
 
 	return (
 		<View style={styles.wrap}>
-			{notesMode ? (
-				<Text
-					style={styles.notesBanner}
-					accessibilityLiveRegion="polite"
-				>
-					Режим заметок · цифры ставятся мелкими кандидатами
-				</Text>
-			) : null}
 			<View style={styles.row}>
 				<ToolbarButton
 					symbol="↶"
@@ -144,17 +136,6 @@ const styles = StyleSheet.create({
 		paddingHorizontal: spacing.screenPadding,
 		marginBottom: 8,
 		gap: 6,
-	},
-	notesBanner: {
-		textAlign: 'center',
-		fontSize: 13,
-		fontWeight: '700',
-		color: colors.playerText,
-		backgroundColor: colors.toolbarActive,
-		borderRadius: 8,
-		paddingVertical: 6,
-		paddingHorizontal: 10,
-		overflow: 'hidden',
 	},
 	row: {
 		flexDirection: 'row',

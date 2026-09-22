@@ -116,7 +116,7 @@ function BoardCellComponent(props: BoardCellProps) {
 							? borders.cageInset
 							: 0,
 						borderLeftWidth: cageBorders.left ? borders.cageInset : 0,
-						borderColor: colors.cageBorder,
+						borderColor: colors.boardCageBorder,
 					},
 				]}
 			/>
@@ -137,6 +137,7 @@ function BoardCellComponent(props: BoardCellProps) {
 						styles.digit,
 						{
 							fontSize: digitSize,
+						transform: [{ translateX: 2 }, { translateY: 1 }],
 							color: conflict
 								? colors.conflictText
 								: isGiven
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
 		borderRadius: 2,
 		backgroundColor: colors.boardBackground,
 		color: colors.sumText,
-		fontWeight: '800',
+		fontWeight: '600',
 		zIndex: 3,
 	},
 	digit: {
